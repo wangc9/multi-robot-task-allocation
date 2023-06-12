@@ -1,0 +1,5 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="venv" value="/home/charles/catkin_ws/src/venv/bin/python3" />
+    <node pkg="multi_allocation" type="Controller.py" name="controller" output="screen" launch-prefix="$(arg venv)" />
+</launch>

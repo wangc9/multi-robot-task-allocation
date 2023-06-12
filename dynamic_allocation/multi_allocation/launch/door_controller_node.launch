@@ -1,0 +1,4 @@
+<launch>
+    <arg name="venv" value="/home/charles/catkin_ws/src/venv/bin/python3" />
+    <node pkg="multi_allocation" type="EnvironmentController.py" name="door_controller" output="screen" launch-prefix="$(arg venv)" />
+</launch>

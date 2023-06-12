@@ -1,0 +1,3 @@
+<launch>
+    <node pkg="multi_allocation" type="Dealer.py" name="dealer" output="screen" />
+</launch>

@@ -1,0 +1,3 @@
+geometry_msgs/PoseStamped[] tasks
+---
+float32[] proposes

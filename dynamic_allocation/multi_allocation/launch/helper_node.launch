@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+<!--     <arg name="model" default="burger"/> -->
+<!--     <arg name="map_file" default="$(find multi_allocation)/maps/map.yaml"/> -->
+
+<!--     <include file="$(find multi_allocation)/launch/turtlebot3_navigation_X.launch"> -->
+<!-- 	  <arg name="model" value="$(arg model)" /> -->
+<!-- 	  <arg name="map_file" default="$(arg map_file)" /> -->
+<!--     </include> -->
+    <arg name="venv" value="/home/charles/catkin_ws/src/venv/bin/python3" />
+    <node pkg="multi_allocation" type="Helper.py" name="helper" output="screen" launch-prefix="$(arg venv)" />
+    <!-- <node pkg="multi_allocation" type="SaveTasks.py" name="task_recorder" output="screen" /> -->
+</launch>

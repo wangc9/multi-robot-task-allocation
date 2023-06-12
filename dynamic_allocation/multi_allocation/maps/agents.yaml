@@ -1,0 +1,17 @@
+waypoints:
+  waypoint_id_1: [ 29.97, 14.19, 0.5 ]
+  waypoint_id_2: [ 24.34, 14.46, 0.5 ]
+  waypoint_id_3: [ 23.70, 10.41, 0.5 ]
+  waypoint_id_4: [ 16.37, 10.80, 0.5 ]
+  waypoint_id_5: [ 16.24, 7.21, 0.5 ]
+  waypoint_id_6: [ 16.41, 10.84, 0.5 ]
+  waypoint_id_7: [ 20.67, 10.67, 0.5 ]
+  waypoint_id_8: [ 23.99, 10.11, 0.5 ]
+  waypoint_id_9: [ 23.93, 4.62, 0.5 ]
+  waypoint_id_10: [ 29.66, 4.39, 0.5 ]
+agent_1:
+  n: 1
+  x: 29.97
+  y: 14.19
+  w: [ waypoint_id_1, waypoint_id_2, waypoint_id_3, waypoint_id_4, waypoint_id_5, waypoint_id_6, waypoint_id_7, waypoint_id_8, waypoint_id_9, waypoint_id_10 ]
+

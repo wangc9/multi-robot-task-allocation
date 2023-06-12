@@ -1,0 +1,5 @@
+int8 s_room
+int8 e_room
+int8[] index
+---
+bool status
