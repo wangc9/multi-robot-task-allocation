@@ -15,6 +15,7 @@ from multi_allocation.srv import ChangeDoorLayer, ChangeDoorLayerRequest
 from multi_allocation.srv import EstimateDistance, EstimateDistanceResponse
 from multi_allocation.srv import UpdateFactor, UpdateFactorRequest
 from sensor_msgs.msg import LaserScan
+from std_srvs.srv import Trigger, TriggerResponse
 from tf.transformations import euler_from_quaternion
 
 
@@ -39,8 +40,10 @@ class RoomBuilder:
         # self.distances = None
         self.room_graph = nx.Graph()
         self.factor_graph = fg.Graph()
+        self.temp_factor_graph = None
         self.counter_1 = 0
         self.counter_2 = 0
+        self.lbp_update_service()
         self.read_points()
         rospy.wait_for_service(f'{self.id}/change_door_layer_service')
         self.update_door_map_service = rospy.ServiceProxy(
@@ -310,12 +313,35 @@ class RoomBuilder:
         self.counter_2 += 1
         if self.counter_2 >= 10:
             self.counter_2 = 0
-            iters, converged = self.factor_graph.lbp(normalize=True)
-            rospy.loginfo(f'{self.id}: LBP done')
-            self.update_layer()
-            self.log_marginals()
+            try:
+                rospy.wait_for_service(f'{self.id}/factor_lbp', 2)
+                lbp_service = rospy.ServiceProxy(f'{self.id}/factor_lbp',
+                                                 Trigger)
+                result = lbp_service()
+                if result.success:
+                    rospy.loginfo('LBP Updated')
+                else:
+                    rospy.logerr('LBP MALFUNCTION')
+            except rospy.ROSException:
+                rospy.logwarn('LBP busy, skipped')
 
         return True
+
+    def lbp_update_callback(self, request):
+        temp_factor = self.factor_graph
+        iters, converged = temp_factor.lbp(normalize=True)
+        rospy.loginfo(f'{self.id}: LBP done')
+        self.update_layer()
+        self.log_marginals()
+        response = TriggerResponse()
+        response.success = True
+        response.message = 'Doors have been changed'
+
+        return response
+
+    def lbp_update_service(self):
+        lbp_update = rospy.Service(f'{self.id}/factor_lbp', Trigger,
+                                   self.lbp_update_callback)
 
     def change_door(self, zone, status):
         for neighbor in self.room_graph.neighbors(zone):
@@ -729,9 +755,17 @@ class RoomBuilder:
 
         self.counter_2 += 1
         if self.counter_2 >= 10:
-            iters, converged = self.factor_graph.lbp(normalize=True)
-            self.update_layer()
-            self.log_marginals()
+            try:
+                rospy.wait_for_service(f'{self.id}/factor_lbp', 2)
+                lbp_service = rospy.ServiceProxy(f'{self.id}/factor_lbp',
+                                                 Trigger)
+                result = lbp_service()
+                if result.success:
+                    rospy.loginfo('LBP Updated')
+                else:
+                    rospy.logerr('LBP MALFUNCTION')
+            except rospy.ROSException:
+                rospy.logwarn('LBP busy, skipped')
 
     def move_callback(self, pose_co):
         pose_msg = PoseStamped()
