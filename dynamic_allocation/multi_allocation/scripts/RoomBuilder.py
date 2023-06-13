@@ -36,7 +36,7 @@ class RoomBuilder:
         self.rooms = dict()
         self.room_poly = dict()
         self.positions = dict()
-        self.distances = None
+        # self.distances = None
         self.room_graph = nx.Graph()
         self.factor_graph = fg.Graph()
         self.counter_1 = 0
@@ -64,6 +64,28 @@ class RoomBuilder:
         return np.sqrt(
             (point_2[0] - point_1[0]) ** 2 + (point_2[1] - point_1[1]) ** 2)
 
+    def topo_distance_calculator(self, room_start: int, room_end: int) -> float:
+        """
+        Calculate topological distance between rooms.
+
+        Take in the number of the start and destination, check the shortest \
+        path in the current distance register, and calculate the true distance \
+        using edge attributes.
+
+        :param room_start: number of the start room
+        :param room_end: number of the end room
+
+        :return: Topological distance
+        """
+        shortest_path = nx.shortest_path(self.room_graph, room_start,
+                                         room_end, "real_dist")
+        result = 0.0
+        for i in range(1, len(shortest_path)):
+            result += self.room_graph[shortest_path[i - 1]][shortest_path[i]][
+                'distance']
+
+        return result
+
     def distance_est_feedback(self, request):
         tic = time.perf_counter()
         response = EstimateDistanceResponse()
@@ -77,7 +99,7 @@ class RoomBuilder:
         else:
             start_dist = self.calculate_distance(
                 self.room_graph.nodes[room_start]["centre"], start_point)
-            topo_dist = self.distances[room_start][room_end]
+            topo_dist = self.topo_distance_calculator(room_start, room_end)
             end_dist = self.calculate_distance(
                 self.room_graph.nodes[room_end]["centre"], end_point)
             response.distance = start_dist + topo_dist + end_dist
@@ -194,8 +216,8 @@ class RoomBuilder:
 
         # print("edges:", self.room_graph.edges.data("door_pos"))
         # print("nodes:", self.room_graph.nodes.data("centre"))
-        self.distances = dict(
-            nx.shortest_path_length(self.room_graph, weight="distance"))
+        # self.distances = dict(
+        #     nx.shortest_path_length(self.room_graph, weight="distance"))
         # print(self.distances)
         # nx.draw(self.room_graph, pos=self.positions, with_labels=True,
         #         font_weight='bold')
@@ -229,8 +251,8 @@ class RoomBuilder:
                     request.cost = int(100 * propability[door])
                     result = self.update_door_map_service(request)
                     # print(f'{door} updated')
-        self.distances = dict(
-            nx.shortest_path_length(self.room_graph, weight="real_dist"))
+        # self.distances = dict(
+        #     nx.shortest_path_length(self.room_graph, weight="real_dist"))
 
     def log_marginals(self):
         """
