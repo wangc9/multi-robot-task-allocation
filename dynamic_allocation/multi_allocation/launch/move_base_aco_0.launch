@@ -20,12 +20,12 @@
   <!--  <param name="base_global_planner" value="aco_ros/aco_planner_v2" /> -->
     <param name="base_global_planner" value="global_planner/GlobalPlanner" />
 
-    <rosparam file="$(find ant_colony_path_planner)/params/param_1/costmap_common.yaml" command="load" ns="global_costmap" />
-    <rosparam file="$(find ant_colony_path_planner)/params/param_1/costmap_common.yaml" command="load" ns="local_costmap" />
-    <rosparam file="$(find ant_colony_path_planner)/params/param_1/costmap_local.yaml" command="load"/>
-    <rosparam file="$(find ant_colony_path_planner)/params/param_1/costmap_global.yaml" command="load"/>
+    <rosparam file="$(find ant_colony_path_planner)/params/param_0/costmap_common.yaml" command="load" ns="global_costmap" />
+    <rosparam file="$(find ant_colony_path_planner)/params/param_0/costmap_common.yaml" command="load" ns="local_costmap" />
+    <rosparam file="$(find ant_colony_path_planner)/params/param_0/costmap_local.yaml" command="load"/>
+    <rosparam file="$(find ant_colony_path_planner)/params/param_0/costmap_global.yaml" command="load"/>
 
-    <rosparam file="$(find ant_colony_path_planner)/params/param_1/move_base_params.yaml" command="load" />
+    <rosparam file="$(find ant_colony_path_planner)/params/param_0/move_base_params.yaml" command="load" />
 
     <rosparam file="$(find multi_allocation)/param/dwa_local_planner_params_$(arg model).yaml" command="load" />
 
@@ -35,6 +35,6 @@
     <!-- <param name="DWAPlannerROS/path_distance_bias" value="64.0" />
     <param name="DWAPlannerROS/occdist_scale" value="0.5" /> -->
 
-    <rosparam file="$(find ant_colony_path_planner)/params/param_1/global_planner_params.yaml" command="load" />
+    <rosparam file="$(find ant_colony_path_planner)/params/param_0/global_planner_params.yaml" command="load" />
   </node>
 </launch>

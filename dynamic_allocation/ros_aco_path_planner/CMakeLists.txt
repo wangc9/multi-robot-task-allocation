@@ -207,8 +207,8 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 add_library(${PROJECT_NAME}
-        src/aco_ros_planner.cpp
-        src/ACO.cpp
+        src/aco_planner_v2.cpp
+        src/ACO_v2.cpp
         src/Ant.cpp
         src/OccupancyGrid.cpp
        src/Path.cpp
