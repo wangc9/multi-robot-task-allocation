@@ -61,8 +61,8 @@
     <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-urdf -model $(arg third_tb3) -x $(arg third_tb3_x_pos) -y $(arg third_tb3_y_pos) -z $(arg third_tb3_z_pos) -Y $(arg third_tb3_yaw) -param robot_description" />
   </group>
 
-<!--   <include file="$(find multi_allocation)/launch/people_publisher_node.launch" /> -->
+  <include file="$(find multi_allocation)/launch/people_publisher_node.launch" />
   <include file="$(find multi_allocation)/launch/door_controller_node.launch" />
-<!--   <node pkg="rosbag" type="play" name="player" output="screen" args="-l /home/charles/catkin_ws/2023-06-05-10-44-12.bag" /> -->
+  <node pkg="rosbag" type="play" name="player" output="screen" args="-l $(find multi_allocation)/people_trajectory.bag" />
 
 </launch>

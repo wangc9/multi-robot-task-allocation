@@ -1,0 +1,4 @@
+<launch>
+    <arg name="venv" value="/home/charles/catkin_ws/src/venv/bin/python3" />
+    <node pkg="multi_allocation" type="PeoplePublisher.py" name="people_publisher" output="screen" launch-prefix="$(arg venv)" />
+</launch>
