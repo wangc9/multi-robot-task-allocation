@@ -1,0 +1,12 @@
+<launch>
+    <arg name="venv" value="/home/charles/catkin_ws/src/venv/bin/python3" />
+    <arg name="task_number" default="10" />
+    <arg name="known_tasks" default="False" />
+    <arg name="can_repeat" default="False" />
+
+    <node pkg="multi_allocation" type="TaskGenerator.py" name="task_generator" output="screen" launch-prefix="$(arg venv)">
+        <param name="~task_number" value="$(arg task_number)" />
+        <param name="~known_tasks" value="$(arg known_tasks)" />
+        <param name="~can_repeat" value="$(arg can_repeat)" />
+    </node>
+</launch>
