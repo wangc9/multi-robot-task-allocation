@@ -253,6 +253,10 @@ class Dealer:
     def fail_task_callback(self, req):
         task = req.task
         self.failed_list.append(task)
+        current_pose = rospy.wait_for_message(f"{self.id}/amcl_pose",
+                                              PoseWithCovarianceStamped)
+        self.current_pose.header = current_pose.header
+        self.current_pose.pose = current_pose.pose.pose
         rospy.loginfo(f'{self.id}: task {task} FAILED and pushed to stack')
         response = FailTaskResponse()
         response.status = True
