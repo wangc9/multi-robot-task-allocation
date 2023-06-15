@@ -14,6 +14,7 @@ from multi_allocation.srv import AskWorkload
 from multi_allocation.srv import AssignAuctioneer
 from multi_allocation.srv import ClearAuctioneer, ClearAuctioneerResponse
 from multi_allocation.srv import MainTaskAllocation, MainTaskAllocationRequest
+from multi_allocation.srv import MultiTaskAllocation, MultiTaskAllocationRequest
 from multi_allocation.srv import OuterSwap
 from std_srvs.srv import Trigger, TriggerResponse
 
@@ -133,6 +134,18 @@ class SGA:
                         else:
                             score[i, j] = max(c_list)
         print(path)
+        for i in range(len(path)):
+            rospy.wait_for_service(f'/tb3_{i}/multi_task_allocation')
+            multi_allocation_service = rospy.ServiceProxy(
+                f'/tb3_{i}/multi_task_allocation', MultiTaskAllocation)
+            tasks = [self.task_file[j] for j in path[i]]
+            request = MultiTaskAllocationRequest()
+            request.tasks = tasks
+            result = multi_allocation_service(request)
+            if not result.result:
+                rospy.logerr(f'Allocation to tb3_{i} failed')
+            else:
+                rospy.loginfo(f'Allocated to tb3_{i}')
 
 
 class Helper:

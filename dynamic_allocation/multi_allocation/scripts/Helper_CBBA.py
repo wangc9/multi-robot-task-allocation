@@ -17,6 +17,7 @@ from multi_allocation.srv import AskWorkload
 from multi_allocation.srv import AssignAuctioneer
 from multi_allocation.srv import ClearAuctioneer, ClearAuctioneerResponse
 from multi_allocation.srv import MainTaskAllocation, MainTaskAllocationRequest
+from multi_allocation.srv import MultiTaskAllocation, MultiTaskAllocationRequest
 from multi_allocation.srv import OuterSwap
 from std_srvs.srv import Trigger, TriggerResponse
 
@@ -962,6 +963,18 @@ class Helper:
             path_list, _ = CBBA_solver.solve(self.AgentList, self.TaskList,
                                              len(self.file_tasks), False)
             print(path_list)
+            for i in range(len(path_list)):
+                rospy.wait_for_service(f'/tb3_{i}/multi_task_allocation')
+                multi_allocation_service = rospy.ServiceProxy(
+                    f'/tb3_{i}/multi_task_allocation', MultiTaskAllocation)
+                tasks = [self.file_tasks[j] for j in path_list[i]]
+                request = MultiTaskAllocationRequest()
+                request.tasks = tasks
+                result = multi_allocation_service(request)
+                if not result.result:
+                    rospy.logerr(f'Allocation to tb3_{i} failed')
+                else:
+                    rospy.loginfo(f'Allocated to tb3_{i}')
 
     def listener(self):
         # while not rospy.is_shutdown():

@@ -19,6 +19,7 @@ from multi_allocation.srv import ClearAuctioneer, ClearAuctioneerResponse
 from multi_allocation.srv import EstimateDistance, EstimateDistanceRequest
 from multi_allocation.srv import FailTask, FailTaskResponse
 from multi_allocation.srv import MainTaskAllocation, MainTaskAllocationResponse
+from multi_allocation.srv import MultiTaskAllocation
 from multi_allocation.srv import OuterSwap, OuterSwapRequest
 from multi_allocation.srv import ProcessTask, ProcessTaskResponse
 from multi_allocation.srv import SecondTaskAllocation, \
@@ -68,6 +69,7 @@ class Dealer:
                                    queue_size=10)
         self.d_lite = None
         # self.register_distance()
+        self.receive_multiple_tasks()
         self.receive_task()
         self.delete_auctioneer()
         self.in_bidding = False
@@ -294,6 +296,17 @@ class Dealer:
         fail_task_service = rospy.Service(f'{self.id}/fail_task',
                                           FailTask,
                                           self.fail_task_callback)
+
+    def multi_task_callback(self, request):
+        tasks = request.tasks
+        self.pub.publish(tasks)
+
+        return True
+
+    def receive_multiple_tasks(self):
+        multi_task_receiver = rospy.Service(f'{self.id}/multi_task_allocation',
+                                            MultiTaskAllocation,
+                                            self.multi_task_callback)
 
     def receive_task_callback(self, request):
         response = SecondTaskAllocationResponse()

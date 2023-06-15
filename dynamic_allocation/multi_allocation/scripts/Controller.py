@@ -37,11 +37,13 @@ class Controller:
 
     def perform_tasks(self):
         rate = rospy.Rate(10)
+        trigger = False
         while not rospy.is_shutdown():
             # print("loop is running")
             if len(self.own_list) > 0:
                 self.next_target = self.own_list[0]
                 del self.own_list[0]
+                rospy.logwarn(f'{self.id}: {len(self.own_list)} left')
                 rospy.wait_for_service(f'{self.id}/process_task')
                 task_service = rospy.ServiceProxy(f'{self.id}/process_task',
                                                   ProcessTask)
@@ -76,6 +78,9 @@ class Controller:
                     self.move_client.wait_for_result()
                 else:
                     self.cancelled = False
+            elif not trigger:
+                print(f'{self.id}: FINISHED')
+                trigger = True
 
             rate.sleep()
 

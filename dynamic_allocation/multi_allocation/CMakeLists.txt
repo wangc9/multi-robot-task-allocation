@@ -77,6 +77,7 @@ add_service_files(
   UpdateFactor.srv
   ChangeDoorLayer.srv
   OuterSwap.srv
+  MultiTaskAllocation.srv
 )
 
 ## Generate actions in the 'action' folder
