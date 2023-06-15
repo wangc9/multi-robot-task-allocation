@@ -73,6 +73,16 @@ class TaskGenerator:
                 task.pose.orientation.w = q_w
                 self.tasks.append(task)
                 counter += 1
+        task = PoseStamped()
+        task.header.frame_id = 'map'
+        task.pose.position.x = -22.0
+        task.pose.position.y = -10.0
+        task.pose.position.z = 0.0
+        task.pose.orientation.x = 0.0
+        task.pose.orientation.y = 0.0
+        task.pose.orientation.z = 0.0
+        task.pose.orientation.w = 1.0
+        self.tasks.append(task)
         current_time = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
         task_file_path = f'tasks_{current_time}.pkl'
 

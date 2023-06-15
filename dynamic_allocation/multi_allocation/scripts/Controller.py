@@ -59,7 +59,7 @@ class Controller:
                 self.move_client.send_goal(action_goal,
                                            feedback_cb=self.feedback_callback)
                 path_found = self.move_client.wait_for_result(
-                    rospy.Duration.from_sec(20.0))
+                    rospy.Duration.from_sec(30.0))
                 # print(path_found)
 
                 if not path_found:
@@ -82,7 +82,8 @@ class Controller:
     def feedback_callback(self, feedback):
         self.counter += 1
         if self.counter > 10:
-            print(feedback.base_position)
+            # print(feedback.base_position)
+            self.counter = 0
             x_1 = feedback.base_position.pose.position.x
             y_1 = feedback.base_position.pose.position.y
             x_2 = self.current_pose.pose.position.x

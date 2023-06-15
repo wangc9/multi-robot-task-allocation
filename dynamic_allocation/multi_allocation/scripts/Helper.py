@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+import pickle
+import random
+
 import rosnode
 import rospy
 from geometry_msgs.msg import PoseStamped
@@ -13,10 +16,14 @@ from std_srvs.srv import Trigger, TriggerResponse
 
 class Helper:
 
-    def __init__(self):
-        rospy.init_node('helper')
+    def __init__(self, manual: bool, file_path: str, known: bool):
+        # self.manual = manual
+        # self.file_path = file_path
+        # self.known = known
         self.robots = []
         self.tasks = []
+        self.file_tasks = []
+        self.intervals = []
         self.auctioneer = None
         names = rosnode.get_node_names()
         for name in names:
@@ -41,6 +48,10 @@ class Helper:
         # self.distances = dict()
         # self.register_distance()
         self.delete_auctioneer()
+        if manual:
+            self.listener()
+        else:
+            self.task_generator(file_path, known)
 
     def all_tasks(self):
         if len(self.tasks) == 0:
@@ -77,7 +88,21 @@ class Helper:
         self.tasks.append([data.header.seq, data.pose, data])
         self.all_tasks()
 
+    def task_generator(self, file_path: str, known: bool):
+        file = open(file_path, 'rb')
+        self.file_tasks = pickle.load(file)
+        file.close()
+        if not known:
+            for task in self.file_tasks:
+                interval = random.randrange(3, 5, 1)
+                self.intervals.append(interval)
+                self.add_task_callback(task)
+                rospy.sleep(float(interval))
+
     def listener(self):
+        # while not rospy.is_shutdown():
+        #     pose = rospy.wait_for_message("task_alloc", PoseStamped)
+        #     self.add_task_callback(pose)
         rospy.Subscriber("task_alloc", PoseStamped, self.add_task_callback)
 
     def ask_auctioneer(self):
@@ -439,8 +464,12 @@ class Helper:
 
 
 if __name__ == '__main__':
-    helper = Helper()
-    helper.ask_auctioneer()
-    helper.listener()
+    rospy.init_node('helper')
+    manual = True if rospy.get_param('~manual', False) is True else False
+    file_path = rospy.get_param('~file_path', None)
+    known = True if rospy.get_param('~known', False) is True else False
+    helper = Helper(manual, file_path, known)
+    # helper.ask_auctioneer()
+    # helper.listener()
 
     rospy.spin()

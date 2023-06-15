@@ -161,6 +161,7 @@ class Dealer:
                             f'{robot}/task_allocation',
                             SecondTaskAllocation)
                         alloc_result = alloc_service(unalloc_task)
+                        rospy.loginfo(f'{robot}: FINAL task added')
                         if unalloc_task not in allocation:
                             allocation.append(unalloc_task)
                         no_auction = True
@@ -299,9 +300,11 @@ class Dealer:
         try:
             if request.task.pose.position.x <= -21.0:
                 self.outer_swap_enabled = True
+                rospy.loginfo(f'{self.id}: FINAL task received')
                 rospy.wait_for_message('/helper/outer_swap')
                 outer_swap_service = rospy.ServiceProxy('/helper/outer_swap',
                                                         OuterSwap)
+                rospy.loginfo(f'{self.id}: OUTERSWAP')
                 outer_request = OuterSwapRequest()
                 outer_request.tasks = self.failed_list
                 result = outer_swap_service(outer_request)

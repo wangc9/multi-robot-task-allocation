@@ -8,6 +8,13 @@
 <!-- 	  <arg name="map_file" default="$(arg map_file)" /> -->
 <!--     </include> -->
     <arg name="venv" value="/home/charles/catkin_ws/src/venv/bin/python3" />
-    <node pkg="multi_allocation" type="Helper.py" name="helper" output="screen" launch-prefix="$(arg venv)" />
+    <arg name="file_path" default="tasks_20230614_141929.pkl" />
+    <arg name="known" default="False" />
+    <arg name="manual" default="False" />
+    <node pkg="multi_allocation" type="Helper.py" name="helper" output="screen" launch-prefix="$(arg venv)">
+        <param name="~manual" value="$(arg manual)" />
+        <param name="~file_path" value="$(arg file_path)" />
+        <param name="~known" value="$(arg known)" />
+    </node>
     <!-- <node pkg="multi_allocation" type="SaveTasks.py" name="task_recorder" output="screen" /> -->
 </launch>
