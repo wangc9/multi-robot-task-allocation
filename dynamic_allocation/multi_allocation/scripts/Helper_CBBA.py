@@ -954,7 +954,27 @@ class Helper:
             for task in self.file_tasks:
                 interval = random.randrange(3, 5, 1)
                 self.intervals.append(interval)
-                self.add_task_callback(task)
+                self.AgentList, self.TaskList = self.create_agents_and_tasks(
+                    len(self.robots), 1, [task])
+                CBBA_solver = CBBA()
+                path_list, _ = CBBA_solver.solve(self.AgentList, self.TaskList,
+                                                 1, False)
+                print(path_list)
+                for i in range(len(path_list)):
+                    if len(path_list[i]) > 0:
+                        rospy.wait_for_service(
+                            f'/tb3_{i}/multi_task_allocation')
+                        multi_allocation_service = rospy.ServiceProxy(
+                            f'/tb3_{i}/multi_task_allocation',
+                            MultiTaskAllocation)
+                        tasks = [task]
+                        request = MultiTaskAllocationRequest()
+                        request.tasks = tasks
+                        result = multi_allocation_service(request)
+                        if not result.result:
+                            rospy.logerr(f'Allocation to tb3_{i} failed')
+                        else:
+                            rospy.loginfo(f'Allocated to tb3_{i}')
                 rospy.sleep(float(interval))
         else:
             self.AgentList, self.TaskList = self.create_agents_and_tasks(

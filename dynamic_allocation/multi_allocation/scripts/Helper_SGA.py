@@ -135,17 +135,21 @@ class SGA:
                             score[i, j] = max(c_list)
         print(path)
         for i in range(len(path)):
-            rospy.wait_for_service(f'/tb3_{i}/multi_task_allocation')
-            multi_allocation_service = rospy.ServiceProxy(
-                f'/tb3_{i}/multi_task_allocation', MultiTaskAllocation)
-            tasks = [self.task_file[j] for j in path[i]]
-            request = MultiTaskAllocationRequest()
-            request.tasks = tasks
-            result = multi_allocation_service(request)
-            if not result.result:
-                rospy.logerr(f'Allocation to tb3_{i} failed')
-            else:
-                rospy.loginfo(f'Allocated to tb3_{i}')
+            if len(path[i]) > 0:
+                rospy.wait_for_service(f'/tb3_{i}/multi_task_allocation')
+                multi_allocation_service = rospy.ServiceProxy(
+                    f'/tb3_{i}/multi_task_allocation', MultiTaskAllocation)
+                if self.task_num == 1:
+                    tasks = self.task_file
+                else:
+                    tasks = [self.task_file[j] for j in path[i]]
+                request = MultiTaskAllocationRequest()
+                request.tasks = tasks
+                result = multi_allocation_service(request)
+                if not result.result:
+                    rospy.logerr(f'Allocation to tb3_{i} failed')
+                else:
+                    rospy.loginfo(f'Allocated to tb3_{i}')
 
 
 class Helper:
@@ -230,7 +234,7 @@ class Helper:
             for task in self.file_tasks:
                 interval = random.randrange(3, 5, 1)
                 self.intervals.append(interval)
-                self.add_task_callback(task)
+                SGA(len(self.robots), 1, [task])
                 rospy.sleep(float(interval))
         else:
             SGA(len(self.robots), len(self.file_tasks), self.file_tasks)
