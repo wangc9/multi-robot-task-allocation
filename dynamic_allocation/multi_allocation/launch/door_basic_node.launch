@@ -1,0 +1,4 @@
+<launch>
+    <arg name="venv" value="/home/charles/catkin_ws/src/venv/bin/python3" />
+    <node pkg="multi_allocation" type="RoomBuilder_Base.py" name="door_node_basic" output="screen" launch-prefix="$(arg venv)" />
+</launch>

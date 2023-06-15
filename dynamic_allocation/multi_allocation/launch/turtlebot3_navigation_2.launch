@@ -4,6 +4,7 @@
   <arg name="map_file" default="$(find multi_allocation)/maps/map.yaml"/>
   <arg name="open_rviz" default="false"/>
   <arg name="move_forward_only" default="false"/>
+  <arg name="basic" default="false"/>
 
   <!-- Turtlebot3 -->
   <!-- <include file="$(find turtlebot3_bringup)/launch/turtlebot3_remote.launch">
@@ -26,7 +27,12 @@
     <arg name="move_forward_only" value="$(arg move_forward_only)"/>
   </include>
   <include file="$(find multi_allocation)/launch/dealer_node.launch"/>
-  <include file="$(find multi_allocation)/launch/door_scanner_node.launch"/>
+  <group if="$(arg basic)">
+    <include file="$(find multi_allocation)/launch/door_basic_node.launch" />
+  </group>
+  <group unless="$(arg basic)">
+    <include file="$(find multi_allocation)/launch/door_scanner_node.launch" />
+  </group>
   <include file="$(find multi_allocation)/launch/controller_node.launch"/>
   </group>
 
