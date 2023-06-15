@@ -8,6 +8,7 @@ from multi_allocation.srv import AssignAuctioneer
 from multi_allocation.srv import ClearAuctioneer, ClearAuctioneerResponse
 from multi_allocation.srv import MainTaskAllocation, MainTaskAllocationRequest
 from multi_allocation.srv import OuterSwap
+from std_srvs.srv import Trigger, TriggerResponse
 
 
 class Helper:
@@ -27,12 +28,15 @@ class Helper:
         #                                 self.register_distance)
         self.counter_1 = 0
         self.fail_tasks = []
+        self.fail_task_counter = 0
         self.map = None
         self.map_np = None
         self.resolution = None
         self.width = None
         self.height = None
         self.distances_dict = None
+        self.outer_swap()
+        self.fail_counter()
         # self.count = 0
         # self.distances = dict()
         # self.register_distance()
@@ -125,6 +129,19 @@ class Helper:
             response.result = False
 
         return response
+
+    def fail_counter_callback(self, request):
+        self.fail_task_counter += 1
+        response = TriggerResponse()
+        response.success = True
+        response.message = 'Failed task registered'
+
+        return response
+
+    def fail_counter(self):
+        fail_counter_service = rospy.Service('/helper/fail_task_counter',
+                                             Trigger,
+                                             self.fail_counter_callback)
 
     def outer_swap_callback(self, request):
         self.counter_1 += 1
