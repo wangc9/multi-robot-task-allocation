@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="venv" value="/home/charles/catkin_ws/src/venv/bin/python3" />
+    <arg name="file_path" default="tasks_20230614_141929.pkl" />
+    <arg name="known" default="true" />
+    <arg name="manual" default="false" />
+    <node pkg="multi_allocation" type="Helper_CBBA.py" name="helper_cbba" output="screen" launch-prefix="$(arg venv)">
+        <param name="~manual" value="$(arg manual)" />
+        <param name="~file_path" value="$(arg file_path)" />
+        <param name="~known" value="$(arg known)" />
+    </node>
+    <!-- <node pkg="multi_allocation" type="SaveTasks.py" name="task_recorder" output="screen" /> -->
+</launch>
