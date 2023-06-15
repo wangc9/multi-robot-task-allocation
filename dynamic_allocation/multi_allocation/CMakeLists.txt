@@ -76,6 +76,7 @@ add_service_files(
   FailTask.srv
   UpdateFactor.srv
   ChangeDoorLayer.srv
+  OuterSwap.srv
 )
 
 ## Generate actions in the 'action' folder

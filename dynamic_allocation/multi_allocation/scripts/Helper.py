@@ -7,6 +7,7 @@ from multi_allocation.srv import AskWorkload
 from multi_allocation.srv import AssignAuctioneer
 from multi_allocation.srv import ClearAuctioneer, ClearAuctioneerResponse
 from multi_allocation.srv import MainTaskAllocation, MainTaskAllocationRequest
+from multi_allocation.srv import OuterSwap
 
 
 class Helper:
@@ -24,6 +25,8 @@ class Helper:
         print(self.robots)
         # self.map_sub = rospy.Subscriber('/tb3_0/map', OccupancyGrid,
         #                                 self.register_distance)
+        self.counter_1 = 0
+        self.fail_tasks = []
         self.map = None
         self.map_np = None
         self.resolution = None
@@ -122,6 +125,20 @@ class Helper:
             response.result = False
 
         return response
+
+    def outer_swap_callback(self, request):
+        self.counter_1 += 1
+        self.fail_tasks += request.tasks
+        if self.counter_1 == len(self.robots):
+            self.counter_1 = 0
+            for task in self.fail_tasks:
+                self.add_task_callback(task)
+
+        return True
+
+    def outer_swap(self):
+        outer_swap_service = rospy.Service('/helper/outer_swap', OuterSwap,
+                                           self.outer_swap_callback)
 
     # def register_distance(self, map_data):
     #     """

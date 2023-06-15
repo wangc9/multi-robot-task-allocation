@@ -19,11 +19,12 @@ from multi_allocation.srv import ClearAuctioneer, ClearAuctioneerResponse
 from multi_allocation.srv import EstimateDistance, EstimateDistanceRequest
 from multi_allocation.srv import FailTask, FailTaskResponse
 from multi_allocation.srv import MainTaskAllocation, MainTaskAllocationResponse
+from multi_allocation.srv import OuterSwap, OuterSwapRequest
 from multi_allocation.srv import ProcessTask, ProcessTaskResponse
 from multi_allocation.srv import SecondTaskAllocation, \
     SecondTaskAllocationResponse
 from nav_msgs.msg import OccupancyGrid
-from std_srvs.srv import Empty
+from std_srvs.srv import Empty, Trigger
 
 
 class Dealer:
@@ -45,6 +46,7 @@ class Dealer:
         print(
             f'The name of this node is {self.id}, recorded robot{self.robot_list}')
         self.main_task_allocation_service = None
+        self.fail_task_counter = 0
         self.distance_dict = dict()
         self.distances = dict()
         self.initial_pose = PoseStamped()
@@ -55,6 +57,7 @@ class Dealer:
             f'{self.id}/move_base/global_costmap/costmap',
             OccupancyGrid,
             self.map_callback)
+        self.outer_swap_enabled = False
         self.costmap_np = None
         self.costmap = None
         self.resolution = None
@@ -143,6 +146,7 @@ class Dealer:
             rospy.loginfo(task_for_allocation)
             bids_temp = []
             allocation = []
+            no_auction = False
             for robot in self.robot_list:
                 rospy.loginfo(f'Auctioneer {self.id} is waiting for {robot}')
                 rospy.wait_for_service(f'{robot}/auction_propose')
@@ -150,39 +154,52 @@ class Dealer:
                     f'{robot}/auction_propose', AuctionPropose)
                 propose_request = AuctionProposeRequest()
                 for unalloc_task in task_for_allocation:
-                    propose_request.tasks.append(unalloc_task)
-                # print(propose_request)
-                assign_result = auction_propose_service(propose_request)
-                if assign_result is not None:
-                    rospy.loginfo(f'{self.id}: {robot} has proposed')
-                bids_temp.append(assign_result.proposes)
-            bids_numpy = np.array(bids_temp)
-            # print(self.robot_list)
-            rospy.loginfo(bids_numpy)
-            best_robot = linear_sum_assignment(-bids_numpy.T)[1]
-            print(best_robot)
-            for i in range(len(self.robot_list)):
-                task_num = np.where(best_robot == i)[0]
-                if len(task_num) > 0:
-                    # if self.id != self.robot_list[i]:
-                    #     print(f'{self.id}: WRONG!!! SHOULD BE {self.robot_list[i]}')
-                    task = task_for_allocation[task_num[0]]
-                    rospy.wait_for_service(
-                        f'{self.robot_list[i]}/task_allocation')
-                    alloc_service = rospy.ServiceProxy(
-                        f'{self.robot_list[i]}/task_allocation',
-                        SecondTaskAllocation)
-                    alloc_result = alloc_service(task)
-                    if alloc_result.result:
-                        rospy.loginfo(f'Auctioneer {self.id}: task {task} allocated\
-                         to robot {self.robot_list[i]}')
-                        allocation.append(task)
+                    if unalloc_task.pose.position.x <= -21.0:
+                        rospy.wait_for_service(
+                            f'{robot}/task_allocation')
+                        alloc_service = rospy.ServiceProxy(
+                            f'{robot}/task_allocation',
+                            SecondTaskAllocation)
+                        alloc_result = alloc_service(unalloc_task)
+                        if unalloc_task not in allocation:
+                            allocation.append(unalloc_task)
+                        no_auction = True
                     else:
-                        print(f'!!!! Failed to allocate task {task} to robot \
-                        {self.robot_list[i]}')
-                else:
-                    rospy.loginfo(
-                        f'{self.robot_list[i]} skipped because less compatible')
+                        propose_request.tasks.append(unalloc_task)
+                # print(propose_request)
+                if not no_auction:
+                    assign_result = auction_propose_service(propose_request)
+                    if assign_result is not None:
+                        rospy.loginfo(f'{self.id}: {robot} has proposed')
+                    bids_temp.append(assign_result.proposes)
+            if not no_auction:
+                bids_numpy = np.array(bids_temp)
+                # print(self.robot_list)
+                rospy.loginfo(bids_numpy)
+                best_robot = linear_sum_assignment(-bids_numpy.T)[1]
+                print(best_robot)
+                for i in range(len(self.robot_list)):
+                    task_num = np.where(best_robot == i)[0]
+                    if len(task_num) > 0:
+                        # if self.id != self.robot_list[i]:
+                        #     print(f'{self.id}: WRONG!!! SHOULD BE {self.robot_list[i]}')
+                        task = task_for_allocation[task_num[0]]
+                        rospy.wait_for_service(
+                            f'{self.robot_list[i]}/task_allocation')
+                        alloc_service = rospy.ServiceProxy(
+                            f'{self.robot_list[i]}/task_allocation',
+                            SecondTaskAllocation)
+                        alloc_result = alloc_service(task)
+                        if alloc_result.result:
+                            rospy.loginfo(f'Auctioneer {self.id}: task {task} allocated\
+                             to robot {self.robot_list[i]}')
+                            allocation.append(task)
+                        else:
+                            print(f'!!!! Failed to allocate task {task} to robot \
+                            {self.robot_list[i]}')
+                    else:
+                        rospy.loginfo(
+                            f'{self.robot_list[i]} skipped because less compatible')
             for item in allocation:
                 self.task_for_auction.remove(item)
             allocation = []
@@ -251,13 +268,22 @@ class Dealer:
                                              self.process_task_callback)
 
     def fail_task_callback(self, req):
-        task = req.task
-        self.failed_list.append(task)
-        current_pose = rospy.wait_for_message(f"{self.id}/amcl_pose",
-                                              PoseWithCovarianceStamped)
-        self.current_pose.header = current_pose.header
-        self.current_pose.pose = current_pose.pose.pose
-        rospy.loginfo(f'{self.id}: task {task} FAILED and pushed to stack')
+        if self.outer_swap_enabled:
+            self.fail_task_counter += 1
+            rospy.wait_for_service('/helper/fail_task_counter')
+            counter_service = rospy.ServiceProxy('helper/fail_task_counter',
+                                                 Trigger)
+            result = counter_service()
+            if result.success:
+                rospy.loginfo(f'{self.id}: added fail number')
+        else:
+            task = req.task
+            self.failed_list.append(task)
+            current_pose = rospy.wait_for_message(f"{self.id}/amcl_pose",
+                                                  PoseWithCovarianceStamped)
+            self.current_pose.header = current_pose.header
+            self.current_pose.pose = current_pose.pose.pose
+            rospy.loginfo(f'{self.id}: task {task} FAILED and pushed to stack')
         response = FailTaskResponse()
         response.status = True
 
@@ -271,7 +297,16 @@ class Dealer:
     def receive_task_callback(self, request):
         response = SecondTaskAllocationResponse()
         try:
-            self.own_list.append(request.task)
+            if request.task.pose.position.x <= -21.0:
+                self.outer_swap_enabled = True
+                rospy.wait_for_message('/helper/outer_swap')
+                outer_swap_service = rospy.ServiceProxy('/helper/outer_swap',
+                                                        OuterSwap)
+                outer_request = OuterSwapRequest()
+                outer_request.tasks = self.failed_list
+                result = outer_swap_service(outer_request)
+            else:
+                self.own_list.append(request.task)
         except AttributeError or AssertionError:
             rospy.loginfo(f'!!!!{self.id}: Fail to receive task {request.task}')
             response.result = False
@@ -279,22 +314,23 @@ class Dealer:
             response.result = True
         finally:
             self.use_init = False
-            rospy.loginfo(
-                f'{self.id}: original distance: {self.covered_distance}')
-            # rospy.loginfo(
-            #     f'{self.id}: current initial pose: {self.initial_pose}')
-            self.covered_distance += self.temp_distance
-            rospy.loginfo(
-                f'{self.id}: distance changed to {self.covered_distance}')
-            # rospy.loginfo(
-            #     f'{self.id}: current initial pose: {self.initial_pose}')
-            self.current_pose = request.task
-            if len(self.own_list) >= 3:
-                rospy.loginfo(f'{self.id}: task swapping')
-                # rospy.loginfo(f'{self.id}: original order: {self.own_list}')
-                self.inner_swap_task()
-                # rospy.loginfo(f'{self.id}: new order: {self.own_list}')
-            self.pub.publish(self.own_list)
+            if not self.outer_swap_enabled:
+                rospy.loginfo(
+                    f'{self.id}: original distance: {self.covered_distance}')
+                # rospy.loginfo(
+                #     f'{self.id}: current initial pose: {self.initial_pose}')
+                self.covered_distance += self.temp_distance
+                rospy.loginfo(
+                    f'{self.id}: distance changed to {self.covered_distance}')
+                # rospy.loginfo(
+                #     f'{self.id}: current initial pose: {self.initial_pose}')
+                self.current_pose = request.task
+                if len(self.own_list) >= 3:
+                    rospy.loginfo(f'{self.id}: task swapping')
+                    # rospy.loginfo(f'{self.id}: original order: {self.own_list}')
+                    self.inner_swap_task()
+                    # rospy.loginfo(f'{self.id}: new order: {self.own_list}')
+                self.pub.publish(self.own_list)
             return response
 
     def auction_propose(self):
