@@ -10,13 +10,13 @@ from sklearn.preprocessing import normalize
 
 import rosnode
 import rospy
-from geometry_msgs.msg import PoseWithCovarianceStamped, PoseStamped
+from gazebo_msgs.msg import ModelStates
+from geometry_msgs.msg import PoseStamped
 from multi_allocation.srv import ChangeDoorLayer, ChangeDoorLayerRequest
 from multi_allocation.srv import EstimateDistance, EstimateDistanceResponse
 from multi_allocation.srv import UpdateFactor, UpdateFactorRequest
 from sensor_msgs.msg import LaserScan
 from std_srvs.srv import Trigger, TriggerResponse
-from tf.transformations import euler_from_quaternion
 
 
 class RoomBuilder:
@@ -32,6 +32,7 @@ class RoomBuilder:
         self.id = f'/{rospy.get_name().split("/")[1]}'
         self.robot_list.remove(self.id)
         rospy.loginfo(f'{self.id}: {self.robot_list}')
+        rospy.loginfo('USING SCANNER')
         self.points = dict()
         self.doors = dict()
         self.rooms = dict()
@@ -51,9 +52,15 @@ class RoomBuilder:
         self.update_factor_service = rospy.Service(f'{self.id}/update_factor',
                                                    UpdateFactor,
                                                    self.update_factor_callback)
-        rospy.Subscriber(f"{self.id}/amcl_pose", PoseWithCovarianceStamped,
-                         self.move_callback)
+        # rospy.Subscriber("/gazebo/model_states", ModelStates,
+        #                  self.move_callback)
         self.distance_estimator()
+        rate = rospy.Rate(1)
+        while not rospy.is_shutdown():
+            model_state = rospy.wait_for_message("/gazebo/model_states",
+                                                 ModelStates)
+            self.move_callback(model_state)
+            rate.sleep()
 
     def world_to_grid(self, point):
         x = point[0] + 21.2
@@ -435,6 +442,237 @@ class RoomBuilder:
 
         return result
 
+    def update_door_new(self, zone, models):
+        doors = [door for door in models.name if 'door' in door]
+        if zone == 0:
+            if 'door_0' in doors:
+                self.change_door(0, False)
+            else:
+                self.change_door(0, True)
+        elif zone == 1:
+            if 'door_1' in doors:
+                self.change_door(1, False)
+            else:
+                self.change_door(1, True)
+        elif zone == 2 or zone == 5:
+            if 'door_2' in doors:
+                self.change_door(2, False)
+            else:
+                self.change_door(2, True)
+        elif zone == 3:
+            if 'door_0' in doors:
+                self.room_graph[3][0]['close'] += 1
+                self.room_graph[3][0]['factor'][1][0] += 1
+                self.call_factor_update(3, 0, [1, 0])
+                self.factor_graph.factor(['0', '3'], potential=normalize(
+                    self.room_graph[3][0]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 3 ||| 0")
+            else:
+                self.room_graph[3][0]['open'] += 1
+                self.room_graph[3][0]['factor'][0][0] += 1
+                self.call_factor_update(3, 0, [0, 0])
+                self.factor_graph.factor(['0', '3'], potential=normalize(
+                    self.room_graph[3][0]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 3 --- 0")
+            if 'door_3' in doors:
+                self.room_graph[3][6]['close'] += 1
+                self.room_graph[3][6]['factor'][0][1] += 1
+                self.call_factor_update(3, 6, [0, 1])
+                self.factor_graph.factor(['3', '6'], potential=normalize(
+                    self.room_graph[3][6]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 3 ||| 6")
+            else:
+                self.room_graph[3][6]['open'] += 1
+                self.room_graph[3][6]['factor'][0][0] += 1
+                self.call_factor_update(3, 6, [0, 0])
+                self.factor_graph.factor(['3', '6'], potential=normalize(
+                    self.room_graph[3][6]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 3 --- 6")
+        elif zone == 4:
+            if 'door_1' in doors:
+                self.room_graph[4][1]['close'] += 1
+                self.room_graph[4][1]['factor'][1][0] += 1
+                self.call_factor_update(4, 1, [1, 0])
+                self.factor_graph.factor(['1', '4'], potential=normalize(
+                    self.room_graph[4][1]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 4 ||| 1")
+            else:
+                self.room_graph[4][1]['open'] += 1
+                self.room_graph[4][1]['factor'][0][0] += 1
+                self.call_factor_update(4, 1, [0, 0])
+                self.factor_graph.factor(['1', '4'], potential=normalize(
+                    self.room_graph[4][1]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 4 --- 1")
+            if 'door_4' in doors:
+                self.room_graph[4][7]['close'] += 1
+                self.room_graph[4][7]['factor'][0][1] += 1
+                self.call_factor_update(4, 7, [0, 1])
+                self.factor_graph.factor(['4', '7'], potential=normalize(
+                    self.room_graph[4][7]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 4 ||| 7")
+            else:
+                self.room_graph[4][7]['open'] += 1
+                self.room_graph[4][7]['factor'][0][0] += 1
+                self.call_factor_update(4, 7, [0, 0])
+                self.factor_graph.factor(['4', '7'], potential=normalize(
+                    self.room_graph[4][7]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 4 --- 7")
+        elif zone == 6:
+            if 'door_3' in doors:
+                self.change_door(6, False)
+            else:
+                self.change_door(6, True)
+        elif zone == 7:
+            if 'door_4' in doors:
+                self.change_door(7, False)
+            else:
+                self.change_door(7, True)
+        elif zone == 8 or zone == 11:
+            if 'door_5' in doors:
+                self.change_door(11, False)
+            else:
+                self.change_door(11, True)
+        elif zone == 9 or zone == 12:
+            if 'door_6' in doors:
+                self.change_door(12, False)
+            else:
+                self.change_door(12, True)
+        elif zone == 10 or zone == 13:
+            if 'door_7' in doors:
+                self.change_door(13, False)
+            else:
+                self.change_door(13, True)
+        elif zone == 15:
+            if 'door_8' in doors:
+                self.change_door(15, False)
+            else:
+                self.change_door(15, True)
+        elif zone == 17:
+            if 'door_9' in doors:
+                self.change_door(17, False)
+            else:
+                self.change_door(17, True)
+        elif zone == 19:
+            if 'door_8' in doors:
+                self.room_graph[19][15]['close'] += 1
+                self.room_graph[19][15]['factor'][1][0] += 1
+                self.call_factor_update(19, 15, [1, 0])
+                self.factor_graph.factor(['15', '19'], potential=normalize(
+                    self.room_graph[19][15]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 19 ||| 15")
+            else:
+                self.room_graph[19][15]['open'] += 1
+                self.room_graph[19][15]['factor'][0][0] += 1
+                self.call_factor_update(19, 15, [0, 0])
+                self.factor_graph.factor(['15', '19'], potential=normalize(
+                    self.room_graph[19][15]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 19 --- 15")
+            if 'door_12' in doors:
+                self.room_graph[19][28]['close'] += 1
+                self.room_graph[19][28]['factor'][0][1] += 1
+                self.call_factor_update(19, 28, [0, 1])
+                self.factor_graph.factor(['19', '28'], potential=normalize(
+                    self.room_graph[19][28]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 19 ||| 28")
+            else:
+                self.room_graph[19][28]['open'] += 1
+                self.room_graph[19][28]['factor'][0][0] += 1
+                self.call_factor_update(19, 28, [0, 0])
+                self.factor_graph.factor(['19', '28'], potential=normalize(
+                    self.room_graph[19][28]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 19 --- 28")
+            if 'door_13' in doors:
+                self.room_graph[19][31]['close'] += 1
+                self.room_graph[19][31]['factor'][0][1] += 1
+                self.call_factor_update(19, 31, [0, 1])
+                self.factor_graph.factor(['19', '31'], potential=normalize(
+                    self.room_graph[19][31]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 19 ||| 31")
+            else:
+                self.room_graph[19][31]['open'] += 1
+                self.room_graph[19][31]['factor'][0][0] += 1
+                self.call_factor_update(19, 31, [0, 0])
+                self.factor_graph.factor(['19', '31'], potential=normalize(
+                    self.room_graph[19][31]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 19 --- 31")
+        elif zone == 21:
+            if 'door_9' in doors:
+                self.room_graph[21][17]['close'] += 1
+                self.room_graph[21][17]['factor'][1][0] += 1
+                self.call_factor_update(21, 17, [1, 0])
+                self.factor_graph.factor(['17', '21'], potential=normalize(
+                    self.room_graph[21][17]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 21 ||| 17")
+            else:
+                self.room_graph[21][17]['open'] += 1
+                self.room_graph[21][17]['factor'][0][0] += 1
+                self.call_factor_update(21, 17, [0, 0])
+                self.factor_graph.factor(['17', '21'], potential=normalize(
+                    self.room_graph[21][17]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 21 --- 17")
+            if 'door_10' in doors:
+                self.room_graph[21][23]['close'] += 1
+                self.room_graph[21][23]['factor'][0][1] += 1
+                self.call_factor_update(21, 23, [0, 1])
+                self.factor_graph.factor(['21', '23'], potential=normalize(
+                    self.room_graph[21][23]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 21 ||| 23")
+            else:
+                self.room_graph[21][23]['open'] += 1
+                self.room_graph[21][23]['factor'][0][0] += 1
+                self.call_factor_update(21, 23, [0, 0])
+                self.factor_graph.factor(['21', '23'], potential=normalize(
+                    self.room_graph[21][23]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 21 --- 23")
+            if 'door_11' in doors:
+                self.room_graph[21][26]['close'] += 1
+                self.room_graph[21][26]['factor'][0][1] += 1
+                self.call_factor_update(21, 26, [0, 1])
+                self.factor_graph.factor(['21', '26'], potential=normalize(
+                    self.room_graph[21][26]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 21 ||| 26")
+            else:
+                self.room_graph[21][26]['open'] += 1
+                self.room_graph[21][26]['factor'][0][0] += 1
+                self.call_factor_update(21, 26, [0, 0])
+                self.factor_graph.factor(['21', '26'], potential=normalize(
+                    self.room_graph[21][26]['factor'], axis=1, norm='l1'))
+                rospy.loginfo(f"{self.id}: 21 --- 26")
+        elif zone == 23:
+            if 'door_10' in doors:
+                self.change_door(23, False)
+            else:
+                self.change_door(23, True)
+        elif zone == 26:
+            if 'door_11' in doors:
+                self.change_door(26, False)
+            else:
+                self.change_door(26, True)
+        elif zone == 28:
+            if 'door_12' in doors:
+                self.change_door(26, False)
+            else:
+                self.change_door(26, True)
+        elif zone == 31:
+            if 'door_13' in doors:
+                self.change_door(31, False)
+            else:
+                self.change_door(31, True)
+
+        self.counter_2 += 1
+        if self.counter_2 >= 10:
+            try:
+                rospy.wait_for_service(f'{self.id}/factor_lbp', 2)
+                lbp_service = rospy.ServiceProxy(f'{self.id}/factor_lbp',
+                                                 Trigger)
+                result = lbp_service()
+                if result.success:
+                    rospy.loginfo('LBP Updated')
+                else:
+                    rospy.logerr('LBP MALFUNCTION')
+            except rospy.ROSException:
+                rospy.logwarn('LBP busy, skipped')
+
     def update_door(self, zone: int, angle: float):
         """
         Given the current zone of the robot and the orientation (yaw), update \
@@ -767,17 +1005,23 @@ class RoomBuilder:
             except rospy.ROSException:
                 rospy.logwarn('LBP busy, skipped')
 
-    def move_callback(self, pose_co):
+    def move_callback(self, model_states):
+        names = model_states.name
+        poses = model_states.pose
+        robot_pose = poses[names.index(self.id.split('/')[1])]
+        # print(f'{self.id}: {robot_pose}')
         pose_msg = PoseStamped()
-        pose_msg.header = pose_co.header
-        pose_msg.pose = pose_co.pose.pose
-        orientation = pose_msg.pose.orientation
+        pose_msg.header.stamp = rospy.Time.now()
+        pose_msg.header.frame_id = 'map'
+        pose_msg.pose = robot_pose
+        # orientation = pose_msg.pose.orientation
         zone = self.room_finder(pose_msg)
         rospy.loginfo(f"{self.id}: in room {zone}")
-        angle = euler_from_quaternion([orientation.x, orientation.y,
-                                       orientation.z, orientation.w])[2]
-        rospy.loginfo(f"{self.id}: angle is {angle}")
-        self.update_door(zone, angle)
+        self.update_door_new(zone, model_states)
+        # angle = euler_from_quaternion([orientation.x, orientation.y,
+        #                                orientation.z, orientation.w])[2]
+        # rospy.loginfo(f"{self.id}: angle is {angle}")
+        # self.update_door(zone, angle)
 
 
 if __name__ == '__main__':

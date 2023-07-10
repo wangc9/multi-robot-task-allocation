@@ -23,6 +23,7 @@ class RoomBuilder:
         self.id = f'/{rospy.get_name().split("/")[1]}'
         self.robot_list.remove(self.id)
         rospy.loginfo(f'{self.id}: {self.robot_list}')
+        rospy.logwarn('USING BASIC')
         self.points = dict()
         self.doors = dict()
         self.rooms = dict()
