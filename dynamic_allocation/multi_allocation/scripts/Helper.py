@@ -10,6 +10,7 @@ from multi_allocation.srv import AskWorkload
 from multi_allocation.srv import AssignAuctioneer
 from multi_allocation.srv import ClearAuctioneer, ClearAuctioneerResponse
 from multi_allocation.srv import MainTaskAllocation, MainTaskAllocationRequest
+from multi_allocation.srv import MultiTaskAllocation, MultiTaskAllocationRequest
 from multi_allocation.srv import OuterSwap
 from std_srvs.srv import Trigger, TriggerResponse
 
@@ -42,6 +43,7 @@ class Helper:
         self.width = None
         self.height = None
         self.distances_dict = None
+        self.known = False
         self.outer_swap()
         self.fail_counter()
         # self.count = 0
@@ -63,41 +65,62 @@ class Helper:
                 rospy.loginfo(task[2])
 
     def add_task_callback(self, data):
-        num = len(self.tasks)
-        rospy.loginfo(
-            f'Task number {num + 1} received, [{data.pose.position.x},\
-             {data.pose.position.y}, {data.pose.position.z}]')
-        if self.auctioneer is None:
-            self.ask_auctioneer()
-        rospy.wait_for_service(f'{self.auctioneer}/main_task_allocation')
-        rospy.loginfo(f'Allocation to {self.auctioneer} started:')
-        main_task_allocation_service = rospy.ServiceProxy(
-            f'{self.auctioneer}/main_task_allocation', MainTaskAllocation)
-        main_allocation_request = MainTaskAllocationRequest()
-        main_allocation_request.pose.header = data.header
-        main_allocation_request.pose.pose = data.pose
-        result = main_task_allocation_service(main_allocation_request)
-        # if not result:
-        #    rospy.loginfo(f'Task {data} failed to be allocated to\
-        #     auctioneer {self.auctioneer}, trying to cancel...')
-        #    try:
-        #        rospy.wait_for_service(f'{self.auctioneer}/cancel_auction')
-        #        cancel_auction_service = rospy.ServiceProxy(f'{self.auctioneer}\
-        #        /cancel_auction', CancelAuction)
-        #        cancel_result = cancel_auction_service()
-        self.tasks.append([data.header.seq, data.pose, data])
-        self.all_tasks()
+        if not self.known:
+            num = len(self.tasks)
+            rospy.loginfo(
+                f'Task number {num + 1} received, [{data.pose.position.x},\
+                 {data.pose.position.y}, {data.pose.position.z}]')
+            if self.auctioneer is None:
+                self.ask_auctioneer()
+            rospy.wait_for_service(f'{self.auctioneer}/main_task_allocation')
+            rospy.loginfo(f'Allocation to {self.auctioneer} started:')
+            main_task_allocation_service = rospy.ServiceProxy(
+                f'{self.auctioneer}/main_task_allocation', MainTaskAllocation)
+            main_allocation_request = MainTaskAllocationRequest()
+            main_allocation_request.pose.header = data.header
+            main_allocation_request.pose.pose = data.pose
+            result = main_task_allocation_service(main_allocation_request)
+            # if not result:
+            #    rospy.loginfo(f'Task {data} failed to be allocated to\
+            #     auctioneer {self.auctioneer}, trying to cancel...')
+            #    try:
+            #        rospy.wait_for_service(f'{self.auctioneer}/cancel_auction')
+            #        cancel_auction_service = rospy.ServiceProxy(f'{self.auctioneer}\
+            #        /cancel_auction', CancelAuction)
+            #        cancel_result = cancel_auction_service()
+            self.tasks.append([data.header.seq, data.pose, data])
+            self.all_tasks()
+        else:
+            num = len(data)
+            rospy.loginfo(f'Received {num} tasks')
+            if self.auctioneer is None:
+                self.ask_auctioneer()
+            rospy.wait_for_service(f'{self.auctioneer}/multi_task_allocation')
+            rospy.loginfo(f'Allocation to {self.auctioneer} started:')
+            multi_task_allocation_service = rospy.ServiceProxy(
+                f'{self.auctioneer}/multi_task_allocation', MultiTaskAllocation)
+            request = MultiTaskAllocationRequest()
+            request.tasks = data
+            result = multi_task_allocation_service(request)
+            if not result.result:
+                rospy.logerr(f'Allocation to {self.auctioneer} failed')
+            else:
+                rospy.loginfo(f'Allocated to {self.auctioneer}')
 
     def task_generator(self, file_path: str, known: bool):
         file = open(file_path, 'rb')
         self.file_tasks = pickle.load(file)
+        print(self.file_tasks)
         file.close()
+        self.known = known
         if not known:
             for task in self.file_tasks:
                 interval = random.randrange(3, 5, 1)
                 self.intervals.append(interval)
                 self.add_task_callback(task)
                 rospy.sleep(float(interval))
+        else:
+            self.add_task_callback(self.file_tasks)
 
     def listener(self):
         # while not rospy.is_shutdown():

@@ -18,8 +18,8 @@ from multi_allocation.srv import AuctionPropose, AuctionProposeResponse, \
 from multi_allocation.srv import ClearAuctioneer, ClearAuctioneerResponse
 from multi_allocation.srv import EstimateDistance, EstimateDistanceRequest
 from multi_allocation.srv import FailTask, FailTaskResponse
-from multi_allocation.srv import MainTaskAllocation, MainTaskAllocationResponse
-from multi_allocation.srv import MultiTaskAllocation
+from multi_allocation.srv import MultiTaskAllocation, \
+    MultiTaskAllocationResponse
 from multi_allocation.srv import OuterSwap, OuterSwapRequest
 from multi_allocation.srv import ProcessTask, ProcessTaskResponse
 from multi_allocation.srv import SecondTaskAllocation, \
@@ -69,7 +69,7 @@ class Dealer:
                                    queue_size=10)
         self.d_lite = None
         # self.register_distance()
-        self.receive_multiple_tasks()
+        # self.receive_multiple_tasks()
         self.receive_task()
         self.delete_auctioneer()
         self.in_bidding = False
@@ -109,14 +109,14 @@ class Dealer:
         return response
 
     def add_auction_task_callback(self, request):
-        response = MainTaskAllocationResponse()
+        response = MultiTaskAllocationResponse()
         if not self.is_auctioneer:
-            response.status = False
+            response.result = False
             rospy.loginfo(f'{self.id}: I am NOT auctioneer!')
         else:
-            self.task_for_auction.append(request.pose)
-            response.status = True
-            rospy.loginfo(f'Task\n {request} \nreceived')
+            self.task_for_auction = request.tasks
+            response.result = True
+            rospy.loginfo(f'Task\n {self.task_for_auction} \nreceived')
             self.auction()
 
         return response
@@ -133,7 +133,7 @@ class Dealer:
 
     def add_auction_task(self):
         self.main_task_allocation_service = rospy.Service(
-            f'{self.id}/main_task_allocation', MainTaskAllocation,
+            f'{self.id}/multi_task_allocation', MultiTaskAllocation,
             self.add_auction_task_callback)
 
     def auction(self):
