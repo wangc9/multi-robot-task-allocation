@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<launch>
+  <!-- Arguments -->
+  <arg name="model" default="burger"/>
+  <arg name="map_file" default="$(find multi_allocation)/maps/map.yaml"/>
+  <arg name="basic" default="false"/>
+
+  <include file="$(find multi_allocation)/launch/turtlebot3_navigation_0.launch">
+	  <arg name="model" value="$(arg model)" />
+	  <arg name="map_file" default="$(arg map_file)" />
+	  <arg name="basic" default="$(arg basic)"/>
+  </include>
+  <include file="$(find multi_allocation)/launch/turtlebot3_navigation_1.launch">
+	  <arg name="model" value="$(arg model)" />
+	  <arg name="map_file" default="$(arg map_file)" />
+	  <arg name="basic" default="$(arg basic)"/>
+  </include>
+  <include file="$(find multi_allocation)/launch/turtlebot3_navigation_2.launch">
+	  <arg name="model" value="$(arg model)" />
+	  <arg name="map_file" default="$(arg map_file)" />
+	  <arg name="basic" default="$(arg basic)"/>
+  </include>
+  <include file="$(find multi_allocation)/launch/turtlebot3_navigation_3.launch">
+	  <arg name="model" value="$(arg model)" />
+	  <arg name="map_file" default="$(arg map_file)" />
+	  <arg name="basic" default="$(arg basic)"/>
+  </include>
+  <include file="$(find multi_allocation)/launch/turtlebot3_navigation_4.launch">
+	  <arg name="model" value="$(arg model)" />
+	  <arg name="map_file" default="$(arg map_file)" />
+	  <arg name="basic" default="$(arg basic)"/>
+  </include>
+
+
+  <!-- rviz -->
+    <node pkg="rviz" type="rviz" name="rviz" required="true"
+          args="-d $(find multi_allocation)/rviz/multi_navigation_5.rviz"/>
+</launch>

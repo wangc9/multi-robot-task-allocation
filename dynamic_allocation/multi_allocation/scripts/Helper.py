@@ -180,6 +180,7 @@ class Helper:
 
     def fail_counter_callback(self, request):
         self.fail_task_counter += 1
+        rospy.loginfo(f'Failed tasks: {self.fail_task_counter}')
         response = TriggerResponse()
         response.success = True
         response.message = 'Failed task registered'
@@ -195,9 +196,9 @@ class Helper:
         self.counter_1 += 1
         self.fail_tasks += request.tasks
         if self.counter_1 == len(self.robots):
+            self.fail_tasks.append(self.file_tasks[-1])
             self.counter_1 = 0
-            for task in self.fail_tasks:
-                self.add_task_callback(task)
+            self.add_task_callback(self.fail_tasks)
 
         return True
 

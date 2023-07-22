@@ -15,11 +15,20 @@ class EnvironmentController:
     def __init__(self):
         self.world_frame = "map"
         rospy.init_node("door_controller")
+        self.init = True
         self.robot_list = []
         names = rosnode.get_node_names()
         for name in names:
-            if "tb3" in name and "move_base" in name:
-                self.robot_list.append(f'/{name.split("/")[1]}')
+            if "tb3" in name:
+                rospy.loginfo(name)
+                temp = f"{name.split('/')[1]}"
+                # rospy.loginfo(f'temp: {temp}')
+                # rospy.loginfo(f'list: {self.robot_list}')
+                if temp not in self.robot_list:
+                    self.robot_list.append(f'/{temp}')
+                temp_set = set(self.robot_list)
+                self.robot_list = list(temp_set)
+        rospy.loginfo(self.robot_list)
         with open("/home/charles/.gazebo/models/blue_door/model.sdf", "r") as f:
             self.door_xml = f.read()
         rospy.wait_for_service('/gazebo/spawn_sdf_model')
@@ -46,15 +55,18 @@ class EnvironmentController:
                         [6, -4, False, False, 10], [8, -2, True, False, 11],
                         [8, 2, True, False, 12], [6, 4, False, False, 13]]
         for entry in self.centres:
-            p_1 = (entry[0] - 1.0, entry[0] - 1.0)
-            p_2 = (entry[0] - 1.0, entry[0] + 1.0)
-            p_3 = (entry[0] + 1.0, entry[0] + 1.0)
-            p_4 = (entry[0] + 1.0, entry[0] - 1.0)
+            p_1 = (entry[0] - 1.5, entry[0] - 1.5)
+            p_2 = (entry[0] - 1.5, entry[0] + 1.5)
+            p_3 = (entry[0] + 1.5, entry[0] + 1.5)
+            p_4 = (entry[0] + 1.5, entry[0] - 1.5)
             points = [p_1, p_2, p_3, p_4]
             self.door_inflation_poly.append(Polygon(points))
 
         while not rospy.is_shutdown():
-            rate = random.randint(1, 60)
+            if self.init:
+                rospy.sleep(30)
+                self.init = False
+            rate = random.randint(10, 60)
             door_cand = random.randint(0, 13)
             rospy.loginfo(f'Spawning door {door_cand} in {rate} seconds')
             if self.centres[door_cand][-2]:
@@ -75,12 +87,18 @@ class EnvironmentController:
         :return: bool (True if nothing is near the area, the door can be \
             changed, otherwise False)
         """
+        rospy.loginfo('checking')
         model_states = rospy.wait_for_message('/gazebo/model_states',
                                               ModelStates)
+        rospy.loginfo(f'state received {model_states}')
         model_names = model_states.name
         for robot in self.robot_list:
+            # rospy.loginfo(f'robot: {robot}')
             position = model_states.pose[model_names.index(robot.split('/')[1])]
-            point = Point(position.x, position.y)
+            # rospy.loginfo(f'position: {position}')
+            point = Point(position.position.x, position.position.y)
+            rospy.loginfo(
+                f'position: {point}, door{door_index}: {self.door_inflation_poly[door_index]}')
             if self.door_inflation_poly[door_index].contains(point):
                 return False
         return True
@@ -109,7 +127,8 @@ class EnvironmentController:
         door_pose.orientation.y = y
         door_pose.orientation.z = z
         door_pose.orientation.w = w
-        if self.surface_check(condition[-1]):
+        check = self.surface_check(condition[-1])
+        if check:
             result = self.add_door(f'door_{condition[-1]}', self.door_xml,
                                    '/doors', door_pose, 'world')
             if result.success:

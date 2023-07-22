@@ -8,6 +8,7 @@ import numpy as np
 
 import rospy
 from geometry_msgs.msg import PoseStamped
+from multi_allocation.srv import RoomFinding
 from nav_msgs.msg import OccupancyGrid
 from tf.transformations import quaternion_from_euler
 
@@ -44,17 +45,23 @@ class TaskGenerator:
         """
         counter = 0
         task_index = []
+        rospy.wait_for_service('/tb3_2/room_finding')
+        room_finding_srv = rospy.ServiceProxy('/tb3_2/room_finding',
+                                              RoomFinding)
+        rospy.loginfo(f'Room finding found')
         self.map = rospy.wait_for_message('/tb3_2/map', OccupancyGrid)
         self.np_map = np.array(self.map.data, dtype=np.int8).reshape(384, 832)
+        rospy.loginfo(f'Map found')
         self.cost_map = rospy.wait_for_message(
             '/tb3_0/move_base/global_costmap/costmap', OccupancyGrid)
         self.np_costmap = np.array(self.cost_map.data, dtype=np.int8).reshape(
             384, 832)
+        rospy.loginfo(f'Costmap found')
         while counter < self.task_number:
             column = random.randint(0, 383)
             row = random.randint(0, 831)
             yaw = random.uniform(-math.pi, math.pi)
-            if 1 < self.np_costmap[column, row] < 20 and self.np_map[
+            if 1 < self.np_costmap[column, row] < 42 and self.np_map[
                 column, row] != -1:
                 if not self.can_repeat:
                     if [column, row] in task_index:
@@ -63,6 +70,7 @@ class TaskGenerator:
                 world_coordinate = self.grid_to_world([column, row])
                 (q_x, q_y, q_z, q_w) = quaternion_from_euler(0.0, 0.0, yaw)
                 task = PoseStamped()
+                task.header.seq = counter
                 task.header.frame_id = 'map'
                 task.pose.position.x = world_coordinate[0]
                 task.pose.position.y = world_coordinate[1]
@@ -71,9 +79,13 @@ class TaskGenerator:
                 task.pose.orientation.y = q_y
                 task.pose.orientation.z = q_z
                 task.pose.orientation.w = q_w
-                self.tasks.append(task)
-                counter += 1
+                result = room_finding_srv(task)
+                if result:
+                    self.tasks.append(task)
+                    counter += 1
+                    rospy.loginfo(f'{counter} generated')
         task = PoseStamped()
+        task.header.seq = counter
         task.header.frame_id = 'map'
         task.pose.position.x = -22.0
         task.pose.position.y = -10.0

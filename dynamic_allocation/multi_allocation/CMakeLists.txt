@@ -78,6 +78,7 @@ add_service_files(
   ChangeDoorLayer.srv
   OuterSwap.srv
   MultiTaskAllocation.srv
+  RoomFinding.srv
 )
 
 ## Generate actions in the 'action' folder

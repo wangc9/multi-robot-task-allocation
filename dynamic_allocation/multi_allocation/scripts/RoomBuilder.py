@@ -14,6 +14,7 @@ from gazebo_msgs.msg import ModelStates
 from geometry_msgs.msg import PoseStamped
 from multi_allocation.srv import ChangeDoorLayer, ChangeDoorLayerRequest
 from multi_allocation.srv import EstimateDistance, EstimateDistanceResponse
+from multi_allocation.srv import RoomFinding
 from multi_allocation.srv import UpdateFactor, UpdateFactorRequest
 from sensor_msgs.msg import LaserScan
 from std_srvs.srv import Trigger, TriggerResponse
@@ -52,6 +53,9 @@ class RoomBuilder:
         self.update_factor_service = rospy.Service(f'{self.id}/update_factor',
                                                    UpdateFactor,
                                                    self.update_factor_callback)
+        self.room_find_service = rospy.Service(f'{self.id}/room_finding',
+                                               RoomFinding,
+                                               self.room_finding_srv_callback)
         # rospy.Subscriber("/gazebo/model_states", ModelStates,
         #                  self.move_callback)
         self.distance_estimator()
@@ -87,8 +91,10 @@ class RoomBuilder:
 
         :return: Topological distance
         """
+        # rospy.loginfo(f'{self.id} source: {room_start} - {room_end}')
         shortest_path = nx.shortest_path(self.room_graph, room_start,
                                          room_end, "real_dist")
+        # rospy.loginfo(f'{self.id} shortest: {shortest_path}')
         result = 0.0
         for i in range(1, len(shortest_path)):
             result += self.room_graph[shortest_path[i - 1]][shortest_path[i]][
@@ -241,6 +247,13 @@ class RoomBuilder:
                 return zone_id
         return None
 
+    def room_finding_srv_callback(self, msg):
+        result = self.room_finder(msg.task)
+        if result is None:
+            return False
+        else:
+            return True
+
     def update_layer(self):
         marginals = self.factor_graph.rv_marginals(normalize=True)
         propability = {str(marg[0]): marg[1][1] for marg in marginals}
@@ -316,7 +329,7 @@ class RoomBuilder:
             c = str(req.s_room)
         self.factor_graph.factor([b, c],
                                  potential=normalize(a, axis=1, norm='l1'))
-        rospy.loginfo(f'{self.id}: received {b}-{c} factor')
+        # rospy.loginfo(f'{self.id}: received {b}-{c} factor')
         self.counter_2 += 1
         if self.counter_2 >= 10:
             self.counter_2 = 0
@@ -357,7 +370,7 @@ class RoomBuilder:
                     self.room_graph[zone][neighbor]['open'] += 1
                     self.room_graph[zone][neighbor]['factor'][0][0] += 1
                     self.call_factor_update(zone, neighbor, [0, 0])
-                    rospy.loginfo(f"{self.id}: {zone} --- {neighbor}")
+                    # rospy.loginfo(f"{self.id}: {zone} --- {neighbor}")
                 else:
                     self.room_graph[zone][neighbor]['close'] += 1
                     if zone < neighbor:
@@ -366,7 +379,7 @@ class RoomBuilder:
                     else:
                         self.room_graph[zone][neighbor]['factor'][1][0] += 1
                         self.call_factor_update(zone, neighbor, [1, 0])
-                    rospy.loginfo(f"{self.id}: {zone} ||| {neighbor}")
+                    # rospy.loginfo(f"{self.id}: {zone} ||| {neighbor}")
                 if zone < neighbor:
                     self.factor_graph.factor([str(zone), str(neighbor)],
                                              potential=normalize(
@@ -466,28 +479,28 @@ class RoomBuilder:
                 self.call_factor_update(3, 0, [1, 0])
                 self.factor_graph.factor(['0', '3'], potential=normalize(
                     self.room_graph[3][0]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 3 ||| 0")
+                # rospy.loginfo(f"{self.id}: 3 ||| 0")
             else:
                 self.room_graph[3][0]['open'] += 1
                 self.room_graph[3][0]['factor'][0][0] += 1
                 self.call_factor_update(3, 0, [0, 0])
                 self.factor_graph.factor(['0', '3'], potential=normalize(
                     self.room_graph[3][0]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 3 --- 0")
+                # rospy.loginfo(f"{self.id}: 3 --- 0")
             if 'door_3' in doors:
                 self.room_graph[3][6]['close'] += 1
                 self.room_graph[3][6]['factor'][0][1] += 1
                 self.call_factor_update(3, 6, [0, 1])
                 self.factor_graph.factor(['3', '6'], potential=normalize(
                     self.room_graph[3][6]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 3 ||| 6")
+                # rospy.loginfo(f"{self.id}: 3 ||| 6")
             else:
                 self.room_graph[3][6]['open'] += 1
                 self.room_graph[3][6]['factor'][0][0] += 1
                 self.call_factor_update(3, 6, [0, 0])
                 self.factor_graph.factor(['3', '6'], potential=normalize(
                     self.room_graph[3][6]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 3 --- 6")
+                # rospy.loginfo(f"{self.id}: 3 --- 6")
         elif zone == 4:
             if 'door_1' in doors:
                 self.room_graph[4][1]['close'] += 1
@@ -495,28 +508,28 @@ class RoomBuilder:
                 self.call_factor_update(4, 1, [1, 0])
                 self.factor_graph.factor(['1', '4'], potential=normalize(
                     self.room_graph[4][1]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 4 ||| 1")
+                # rospy.loginfo(f"{self.id}: 4 ||| 1")
             else:
                 self.room_graph[4][1]['open'] += 1
                 self.room_graph[4][1]['factor'][0][0] += 1
                 self.call_factor_update(4, 1, [0, 0])
                 self.factor_graph.factor(['1', '4'], potential=normalize(
                     self.room_graph[4][1]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 4 --- 1")
+                # rospy.loginfo(f"{self.id}: 4 --- 1")
             if 'door_4' in doors:
                 self.room_graph[4][7]['close'] += 1
                 self.room_graph[4][7]['factor'][0][1] += 1
                 self.call_factor_update(4, 7, [0, 1])
                 self.factor_graph.factor(['4', '7'], potential=normalize(
                     self.room_graph[4][7]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 4 ||| 7")
+                # rospy.loginfo(f"{self.id}: 4 ||| 7")
             else:
                 self.room_graph[4][7]['open'] += 1
                 self.room_graph[4][7]['factor'][0][0] += 1
                 self.call_factor_update(4, 7, [0, 0])
                 self.factor_graph.factor(['4', '7'], potential=normalize(
                     self.room_graph[4][7]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 4 --- 7")
+                # rospy.loginfo(f"{self.id}: 4 --- 7")
         elif zone == 6:
             if 'door_3' in doors:
                 self.change_door(6, False)
@@ -559,42 +572,42 @@ class RoomBuilder:
                 self.call_factor_update(19, 15, [1, 0])
                 self.factor_graph.factor(['15', '19'], potential=normalize(
                     self.room_graph[19][15]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 19 ||| 15")
+                # rospy.loginfo(f"{self.id}: 19 ||| 15")
             else:
                 self.room_graph[19][15]['open'] += 1
                 self.room_graph[19][15]['factor'][0][0] += 1
                 self.call_factor_update(19, 15, [0, 0])
                 self.factor_graph.factor(['15', '19'], potential=normalize(
                     self.room_graph[19][15]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 19 --- 15")
+                # rospy.loginfo(f"{self.id}: 19 --- 15")
             if 'door_12' in doors:
                 self.room_graph[19][28]['close'] += 1
                 self.room_graph[19][28]['factor'][0][1] += 1
                 self.call_factor_update(19, 28, [0, 1])
                 self.factor_graph.factor(['19', '28'], potential=normalize(
                     self.room_graph[19][28]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 19 ||| 28")
+                # rospy.loginfo(f"{self.id}: 19 ||| 28")
             else:
                 self.room_graph[19][28]['open'] += 1
                 self.room_graph[19][28]['factor'][0][0] += 1
                 self.call_factor_update(19, 28, [0, 0])
                 self.factor_graph.factor(['19', '28'], potential=normalize(
                     self.room_graph[19][28]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 19 --- 28")
+                # rospy.loginfo(f"{self.id}: 19 --- 28")
             if 'door_13' in doors:
                 self.room_graph[19][31]['close'] += 1
                 self.room_graph[19][31]['factor'][0][1] += 1
                 self.call_factor_update(19, 31, [0, 1])
                 self.factor_graph.factor(['19', '31'], potential=normalize(
                     self.room_graph[19][31]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 19 ||| 31")
+                # rospy.loginfo(f"{self.id}: 19 ||| 31")
             else:
                 self.room_graph[19][31]['open'] += 1
                 self.room_graph[19][31]['factor'][0][0] += 1
                 self.call_factor_update(19, 31, [0, 0])
                 self.factor_graph.factor(['19', '31'], potential=normalize(
                     self.room_graph[19][31]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 19 --- 31")
+                # rospy.loginfo(f"{self.id}: 19 --- 31")
         elif zone == 21:
             if 'door_9' in doors:
                 self.room_graph[21][17]['close'] += 1
@@ -602,42 +615,42 @@ class RoomBuilder:
                 self.call_factor_update(21, 17, [1, 0])
                 self.factor_graph.factor(['17', '21'], potential=normalize(
                     self.room_graph[21][17]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 21 ||| 17")
+                # rospy.loginfo(f"{self.id}: 21 ||| 17")
             else:
                 self.room_graph[21][17]['open'] += 1
                 self.room_graph[21][17]['factor'][0][0] += 1
                 self.call_factor_update(21, 17, [0, 0])
                 self.factor_graph.factor(['17', '21'], potential=normalize(
                     self.room_graph[21][17]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 21 --- 17")
+                # rospy.loginfo(f"{self.id}: 21 --- 17")
             if 'door_10' in doors:
                 self.room_graph[21][23]['close'] += 1
                 self.room_graph[21][23]['factor'][0][1] += 1
                 self.call_factor_update(21, 23, [0, 1])
                 self.factor_graph.factor(['21', '23'], potential=normalize(
                     self.room_graph[21][23]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 21 ||| 23")
+                # rospy.loginfo(f"{self.id}: 21 ||| 23")
             else:
                 self.room_graph[21][23]['open'] += 1
                 self.room_graph[21][23]['factor'][0][0] += 1
                 self.call_factor_update(21, 23, [0, 0])
                 self.factor_graph.factor(['21', '23'], potential=normalize(
                     self.room_graph[21][23]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 21 --- 23")
+                # rospy.loginfo(f"{self.id}: 21 --- 23")
             if 'door_11' in doors:
                 self.room_graph[21][26]['close'] += 1
                 self.room_graph[21][26]['factor'][0][1] += 1
                 self.call_factor_update(21, 26, [0, 1])
                 self.factor_graph.factor(['21', '26'], potential=normalize(
                     self.room_graph[21][26]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 21 ||| 26")
+                # rospy.loginfo(f"{self.id}: 21 ||| 26")
             else:
                 self.room_graph[21][26]['open'] += 1
                 self.room_graph[21][26]['factor'][0][0] += 1
                 self.call_factor_update(21, 26, [0, 0])
                 self.factor_graph.factor(['21', '26'], potential=normalize(
                     self.room_graph[21][26]['factor'], axis=1, norm='l1'))
-                rospy.loginfo(f"{self.id}: 21 --- 26")
+                # rospy.loginfo(f"{self.id}: 21 --- 26")
         elif zone == 23:
             if 'door_10' in doors:
                 self.change_door(23, False)
@@ -1016,7 +1029,7 @@ class RoomBuilder:
         pose_msg.pose = robot_pose
         # orientation = pose_msg.pose.orientation
         zone = self.room_finder(pose_msg)
-        rospy.loginfo(f"{self.id}: in room {zone}")
+        # rospy.loginfo(f"{self.id}: in room {zone}")
         self.update_door_new(zone, model_states)
         # angle = euler_from_quaternion([orientation.x, orientation.y,
         #                                orientation.z, orientation.w])[2]

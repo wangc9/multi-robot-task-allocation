@@ -18,7 +18,7 @@
   <!-- Global Planner -->
   <!-- <param name="base_global_planner" value="RRTstar_planner/RRTstarPlannerROS" /> -->
   <!--  <param name="base_global_planner" value="aco_ros/aco_planner_v2" /> -->
-    <param name="base_global_planner" value="global_planner/GlobalPlanner" /> 
+    <param name="base_global_planner" value="navfn/NavfnROS" />
 	
     <rosparam file="$(find ant_colony_path_planner)/params/param_2/costmap_common.yaml" command="load" ns="global_costmap" />
     <rosparam file="$(find ant_colony_path_planner)/params/param_2/costmap_common.yaml" command="load" ns="local_costmap" />

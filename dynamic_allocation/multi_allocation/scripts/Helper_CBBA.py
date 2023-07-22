@@ -978,16 +978,18 @@ class Helper:
                 rospy.sleep(float(interval))
         else:
             self.AgentList, self.TaskList = self.create_agents_and_tasks(
-                len(self.robots), len(self.file_tasks), self.file_tasks)
+                len(self.robots), len(self.file_tasks[:-1]),
+                self.file_tasks[:-1])
             CBBA_solver = CBBA()
             path_list, _ = CBBA_solver.solve(self.AgentList, self.TaskList,
-                                             len(self.file_tasks), False)
+                                             len(self.file_tasks[:-1]), False)
             print(path_list)
             for i in range(len(path_list)):
-                rospy.wait_for_service(f'/tb3_{i}/multi_task_allocation')
+                rospy.wait_for_service(f'/tb3_{i}/test_multi_task_allocation')
                 multi_allocation_service = rospy.ServiceProxy(
-                    f'/tb3_{i}/multi_task_allocation', MultiTaskAllocation)
+                    f'/tb3_{i}/test_multi_task_allocation', MultiTaskAllocation)
                 tasks = [self.file_tasks[j] for j in path_list[i]]
+                tasks.append(self.file_tasks[-1])
                 request = MultiTaskAllocationRequest()
                 request.tasks = tasks
                 result = multi_allocation_service(request)

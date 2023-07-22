@@ -8,7 +8,7 @@ global_costmap:
     - { name: static_map, type: "costmap_2d::StaticLayer" }
     - { name: door_map, type: "costmap_2d::StaticLayer" }
     - { name: obstacles_layer, type: "costmap_2d::ObstacleLayer" }
-    - { name: people_layer, type: "social_navigation_layers::ProxemicLayer" }
+    #    - { name: people_layer, type: "social_navigation_layers::ProxemicLayer" }
     - { name: inflater_layer, type: "costmap_2d::InflationLayer" }
   
   # Layers
@@ -21,7 +21,7 @@ global_costmap:
 
   inflater_layer:
     inflation_radius: 1
-    cost_scaling_factor: 6
+    cost_scaling_factor: 1
 
   static_map:
     unknown_cost_value: -1
@@ -43,5 +43,5 @@ global_costmap:
     use_maximum: true
     trinary_costmap: false
 
-  people_layer:
-    enabled: true
+#  people_layer:
+#    enabled: true

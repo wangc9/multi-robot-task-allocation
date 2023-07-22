@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import copy
 import math
 import time
 
@@ -37,6 +38,7 @@ class Dealer:
         self.world_frame = "map"
         rospy.init_node("dealer")
         self.own_list = []
+        self.second_list = []
         self.failed_list = []
         self.robot_list = []
         names = rosnode.get_node_names()
@@ -58,6 +60,7 @@ class Dealer:
             f'{self.id}/move_base/global_costmap/costmap',
             OccupancyGrid,
             self.map_callback)
+        self.final = False
         self.outer_swap_enabled = False
         self.costmap_np = None
         self.costmap = None
@@ -69,7 +72,7 @@ class Dealer:
                                    queue_size=10)
         self.d_lite = None
         # self.register_distance()
-        # self.receive_multiple_tasks()
+        self.receive_multiple_tasks()
         self.receive_task()
         self.delete_auctioneer()
         self.in_bidding = False
@@ -137,17 +140,20 @@ class Dealer:
             self.add_auction_task_callback)
 
     def auction(self):
+        tic = time.perf_counter()
         while len(self.task_for_auction) != 0:
-            rospy.loginfo(f'{self.id} is acting as auctioneer:')
+            # rospy.loginfo(f'{self.id} is acting as auctioneer:')
             if len(self.task_for_auction) == 1:
                 task_for_allocation = self.task_for_auction
             else:
                 task_for_allocation = self.task_for_auction[
                                       0:min(len(self.robot_list),
                                             len(self.task_for_auction))]
-            rospy.loginfo(task_for_allocation)
+            # rospy.loginfo(task_for_allocation)
             bids_temp = []
             allocation = []
+            final_task = None
+            last_received = False
             no_auction = False
             for robot in self.robot_list:
                 rospy.loginfo(f'Auctioneer {self.id} is waiting for {robot}')
@@ -157,16 +163,8 @@ class Dealer:
                 propose_request = AuctionProposeRequest()
                 for unalloc_task in task_for_allocation:
                     if unalloc_task.pose.position.x <= -21.0:
-                        rospy.wait_for_service(
-                            f'{robot}/task_allocation')
-                        alloc_service = rospy.ServiceProxy(
-                            f'{robot}/task_allocation',
-                            SecondTaskAllocation)
-                        alloc_result = alloc_service(unalloc_task)
-                        rospy.loginfo(f'{robot}: FINAL task added')
-                        if unalloc_task not in allocation:
-                            allocation.append(unalloc_task)
-                        no_auction = True
+                        last_received = True
+                        final_task = unalloc_task
                     else:
                         propose_request.tasks.append(unalloc_task)
                 # print(propose_request)
@@ -179,11 +177,12 @@ class Dealer:
                 bids_numpy = np.array(bids_temp)
                 # print(self.robot_list)
                 rospy.loginfo(bids_numpy)
-                best_robot = linear_sum_assignment(-bids_numpy.T)[1]
+                best_robot = linear_sum_assignment(-bids_numpy)[1]
                 print(best_robot)
                 for i in range(len(self.robot_list)):
                     task_num = np.where(best_robot == i)[0]
-                    if len(task_num) > 0:
+                    if len(task_num) > 0 and bids_numpy[i][
+                        task_num[0]] != -100000.0:
                         # if self.id != self.robot_list[i]:
                         #     print(f'{self.id}: WRONG!!! SHOULD BE {self.robot_list[i]}')
                         task = task_for_allocation[task_num[0]]
@@ -198,17 +197,34 @@ class Dealer:
                              to robot {self.robot_list[i]}')
                             allocation.append(task)
                         else:
-                            print(f'!!!! Failed to allocate task {task} to robot \
+                            rospy.logerr(f'!!!! Failed to allocate task {task} to robot \
                             {self.robot_list[i]}')
                     else:
                         rospy.loginfo(
                             f'{self.robot_list[i]} skipped because less compatible')
+            if last_received:
+                for robot in self.robot_list:
+                    rospy.loginfo(f'FINAL: {final_task}')
+                    rospy.wait_for_service(
+                        f'{robot}/task_allocation')
+                    alloc_service = rospy.ServiceProxy(
+                        f'{robot}/task_allocation',
+                        SecondTaskAllocation)
+                    alloc_result = alloc_service(final_task)
+                    if alloc_result.result:
+                        rospy.loginfo(f'{robot}: FINAL task added')
+                    else:
+                        rospy.logwarn(f'FAILED TO ADD FINAL TO {robot}')
+                if final_task not in allocation:
+                    allocation.append(final_task)
+                no_auction = True
             for item in allocation:
                 self.task_for_auction.remove(item)
             allocation = []
             task_for_allocation = []
+        toc = time.perf_counter()
         rospy.loginfo(f'Auctioneer {self.id}: Allocation finished, returning \
-        auctioneer status')
+        auctioneer status, used {toc - tic} s')
         self.clear_auctioneer()
 
     def clear_auctioneer(self):
@@ -255,13 +271,31 @@ class Dealer:
     def process_task_callback(self, req):
         task = req.task
         task_index = task.header.seq
+        if self.moved:
+            self.second_list = [tasks for tasks in self.second_list if
+                                tasks.header.seq != task_index]
         self.own_list = [tasks for tasks in self.own_list if
                          tasks.header.seq != task_index]
+        # rospy.loginfo(f'{self.id}: PROCESSED TASK, NEW OWN: {self.own_list}')
         response = ProcessTaskResponse()
         response.status = True
-        self.current_goal = task
-        self.moved = True
-        rospy.loginfo(f"{self.id}: I am going to move, changed current goal")
+        if req.task.pose.position.x <= -21.0:
+            self.outer_swap_enabled = True
+            rospy.loginfo(f'{self.id}: FINAL task received')
+            self.own_list = []
+            rospy.wait_for_service('/helper/outer_swap')
+            outer_swap_service = rospy.ServiceProxy('/helper/outer_swap',
+                                                    OuterSwap)
+            rospy.loginfo(f'{self.id}: OUTERSWAP')
+            self.final = False
+            outer_request = OuterSwapRequest()
+            outer_request.tasks = self.failed_list
+            result = outer_swap_service(outer_request)
+        else:
+            self.current_goal = task
+            self.moved = True
+            rospy.loginfo(
+                f"{self.id}: I am going to move, changed current goal")
 
         return response
 
@@ -274,11 +308,11 @@ class Dealer:
         if self.outer_swap_enabled:
             self.fail_task_counter += 1
             rospy.wait_for_service('/helper/fail_task_counter')
-            counter_service = rospy.ServiceProxy('helper/fail_task_counter',
+            counter_service = rospy.ServiceProxy('/helper/fail_task_counter',
                                                  Trigger)
             result = counter_service()
-            if result.success:
-                rospy.loginfo(f'{self.id}: added fail number')
+            # if result.success:
+            #     rospy.loginfo(f'{self.id}: added fail number')
         else:
             task = req.task
             self.failed_list.append(task)
@@ -286,7 +320,7 @@ class Dealer:
                                                   PoseWithCovarianceStamped)
             self.current_pose.header = current_pose.header
             self.current_pose.pose = current_pose.pose.pose
-            rospy.loginfo(f'{self.id}: task {task} FAILED and pushed to stack')
+            # rospy.loginfo(f'{self.id}: task {task} FAILED and pushed to stack')
         response = FailTaskResponse()
         response.status = True
 
@@ -304,50 +338,72 @@ class Dealer:
         return True
 
     def receive_multiple_tasks(self):
-        multi_task_receiver = rospy.Service(f'{self.id}/multi_task_allocation',
-                                            MultiTaskAllocation,
-                                            self.multi_task_callback)
+        multi_task_receiver = rospy.Service(
+            f'{self.id}/test_multi_task_allocation',
+            MultiTaskAllocation,
+            self.multi_task_callback)
 
     def receive_task_callback(self, request):
+        # rospy.loginfo(f'{self.id}: received {request}')
+        # rospy.loginfo(f'{self.id}: INIT OWN {self.own_list}')
         response = SecondTaskAllocationResponse()
-        try:
-            if request.task.pose.position.x <= -21.0:
-                self.outer_swap_enabled = True
-                rospy.loginfo(f'{self.id}: FINAL task received')
-                rospy.wait_for_message('/helper/outer_swap')
-                outer_swap_service = rospy.ServiceProxy('/helper/outer_swap',
-                                                        OuterSwap)
-                rospy.loginfo(f'{self.id}: OUTERSWAP')
-                outer_request = OuterSwapRequest()
-                outer_request.tasks = self.failed_list
-                result = outer_swap_service(outer_request)
+        request.task.header.stamp = rospy.Time.now()
+        if request.task.pose.position.x <= -21.0:
+            self.final = True
+        #     rospy.loginfo(f'{self.id}: FINAL task received')
+        #     rospy.wait_for_message('/helper/outer_swap')
+        #     outer_swap_service = rospy.ServiceProxy('/helper/outer_swap',
+        #                                             OuterSwap)
+        #     rospy.loginfo(f'{self.id}: OUTERSWAP')
+        #     outer_request = OuterSwapRequest()
+        #     outer_request.tasks = self.failed_list
+        #     result = outer_swap_service(outer_request)
+        else:
+            if self.moved:
+                self.second_list.append(request.task)
             else:
                 self.own_list.append(request.task)
-        except AttributeError or AssertionError:
-            rospy.loginfo(f'!!!!{self.id}: Fail to receive task {request.task}')
-            response.result = False
-        else:
+            # rospy.loginfo(f'{self.id}: NEW OWN {self.own_list}')
+        if self.final or request.task.pose.position.x == self.own_list[
+            -1].pose.position.x or request.task.pose.position.x == \
+                self.second_list[-1].pose.position.x:
             response.result = True
-        finally:
-            self.use_init = False
-            if not self.outer_swap_enabled:
-                rospy.loginfo(
-                    f'{self.id}: original distance: {self.covered_distance}')
-                # rospy.loginfo(
-                #     f'{self.id}: current initial pose: {self.initial_pose}')
-                self.covered_distance += self.temp_distance
-                rospy.loginfo(
-                    f'{self.id}: distance changed to {self.covered_distance}')
-                # rospy.loginfo(
-                #     f'{self.id}: current initial pose: {self.initial_pose}')
-                self.current_pose = request.task
+        else:
+            response.result = False
+        self.use_init = False
+        if not self.final:
+            # rospy.loginfo(
+            #     f'{self.id}: original distance: {self.covered_distance}')
+            # rospy.loginfo(
+            #     f'{self.id}: current initial pose: {self.initial_pose}')
+            self.covered_distance += self.temp_distance
+            # rospy.loginfo(
+            #     f'{self.id}: distance changed to {self.covered_distance}')
+            # rospy.loginfo(
+            #     f'{self.id}: current initial pose: {self.initial_pose}')
+            self.current_pose = request.task
+
+            # self.pub.publish(self.own_list)
+        else:
+            if self.moved:
+                if len(self.second_list) >= 3:
+                    rospy.loginfo(f'{self.id}: second task swapping')
+                    # rospy.loginfo(f'{self.id}: original order: {self.own_list}')
+                    self.inner_swap_task()
+                    # rospy.loginfo(f'{self.id}: new order: {self.own_list}')
+                self.second_list.append(request.task)
+                rospy.loginfo(f'{self.id}: DEALER TASKS: {self.second_list}')
+                self.pub.publish(self.second_list)
+            else:
                 if len(self.own_list) >= 3:
                     rospy.loginfo(f'{self.id}: task swapping')
                     # rospy.loginfo(f'{self.id}: original order: {self.own_list}')
                     self.inner_swap_task()
                     # rospy.loginfo(f'{self.id}: new order: {self.own_list}')
+                self.own_list.append(request.task)
+                rospy.loginfo(f'{self.id}: DEALER TASKS: {self.own_list}')
                 self.pub.publish(self.own_list)
-            return response
+        return response
 
     def auction_propose(self):
         auction_propose_service = rospy.Service(f'{self.id}/auction_propose',
@@ -385,9 +441,9 @@ class Dealer:
             # length.data = float(-self.calculate_path_length(temp_plan.plan))
             # print(length)
             # print(type(length))
-            rospy.loginfo(f'{self.id}: current pose: {self.current_pose}')
-            rospy.loginfo(
-                f'{self.id}: original distance for proposal: {self.covered_distance}')
+            # rospy.loginfo(f'{self.id}: current pose: {self.current_pose}')
+            # rospy.loginfo(
+            #     f'{self.id}: original distance for proposal: {self.covered_distance}')
             # self.temp_distance = -self.calculate_path_length(temp_plan.plan)
             self.temp_distance = -t_dist
             # register initial pose as -1
@@ -398,8 +454,12 @@ class Dealer:
                 a = self.current_pose.header.seq
                 self.add_distance_to_dict(a, task.header.seq,
                                           -self.temp_distance)
-            respond.proposes.append(
-                float(self.covered_distance + self.temp_distance))
+            if self.temp_distance <= -70:
+                respond.proposes.append(
+                    float(-100000.0))
+            else:
+                respond.proposes.append(
+                    float(self.covered_distance + self.temp_distance))
         # print(respond)
         # print(type(respond))
 
@@ -433,15 +493,26 @@ class Dealer:
         Task swap inside a single robot
         :return: In-place change of `self.own_list`
         """
-        tic = time.perf_counter()
+        # tic = time.perf_counter()
         # rospy.loginfo(f'{self.id}: initial pose {self.initial_pose}')
-        temp_list = self.own_list
-
-        # Push start point (initial pose or current goal) to end
-        if not self.moved:
-            temp_list.append(self.initial_pose)
-        else:
+        if self.moved:
+            rospy.loginfo(
+                f'{self.id}: INITIAL SECOND BEFORE SWAP: {self.second_list}')
+            test_list = copy.deepcopy(self.second_list)
+            # rospy.loginfo(f'{self.id}: TEST LIST: {test_list}')
+            temp_list = self.second_list
             temp_list.append(self.current_goal)
+            rospy.loginfo(f'{self.id}: FAILED TASKS {temp_list}')
+        else:
+            rospy.loginfo(
+                f'{self.id}: INITIAL OWN BEFORE SWAP: {self.own_list}')
+            test_list = copy.deepcopy(self.own_list)
+            # rospy.loginfo(f'{self.id}: TEST LIST: {test_list}')
+            temp_list = self.own_list
+            # rospy.loginfo(f'{self.id}: TEMP LIST: {temp_list}')
+
+            # Push start point (initial pose or current goal) to end
+            temp_list.append(self.initial_pose)
         temp = []
         temp_all = []
         tour_1 = []
@@ -474,12 +545,20 @@ class Dealer:
                     # req.goal = self.own_list[j]
                     # req.tolerance = 0.5
                     # change index of task i and j to -1 if is initial pose
-                    if i != a - 1:
+                    if i < a - 1 and not self.moved:
                         n_1 = self.own_list[i].header.seq
+                    elif i < a - 1 and self.moved:
+                        n_1 = self.second_list[i].header.seq
+                    elif self.moved:
+                        n_1 = self.current_goal.header.seq
                     else:
                         n_1 = -1
-                    if j != a - 1:
+                    if j < a - 1 and not self.moved:
                         n_2 = self.own_list[j].header.seq
+                    elif j < a - 1 and self.moved:
+                        n_2 = self.second_list[j].header.seq
+                    elif self.moved:
+                        n_2 = self.current_goal.header.seq
                     else:
                         n_2 = -1
                     if n_2 in self.distance_dict[n_1]:
@@ -518,8 +597,18 @@ class Dealer:
         print("*********************")
 
         # Real tour
-        own_list_1 = [self.own_list[i] for i in tour_1]
-        own_list_2 = [self.own_list[i] for i in tour_2]
+        if self.moved:
+            own_list_1 = [temp_list[i] for i in tour_1]
+        else:
+            own_list_1 = [self.own_list[i] for i in tour_1]
+        rospy.loginfo(
+            f'{self.id}: list_1: {[item.header.seq for item in own_list_1]}')
+        if self.moved:
+            own_list_2 = [temp_list[i] for i in tour_2]
+        else:
+            own_list_2 = [self.own_list[i] for i in tour_2]
+        rospy.loginfo(
+            f'{self.id}: list_2: {[item.header.seq for item in own_list_2]}')
         covered_distance_1 = 0.0
         covered_distance_2 = 0.0
         self.covered_distance = 0.0
@@ -547,7 +636,11 @@ class Dealer:
             # temp_plan = get_plan(req)
             # dist = self.calculate_path_length(temp_plan.plan)
             covered_distance_1 = -dist
-            self.add_distance_to_dict(-1, t_1, dist)
+            if not self.moved:
+                self.add_distance_to_dict(-1, t_1, dist)
+            else:
+                self.add_distance_to_dict(self.current_goal.header.seq, t_1,
+                                          dist)
             # print("initial distance 1", covered_distance_1)
 
         # req.goal = own_list_2[0]
@@ -568,30 +661,56 @@ class Dealer:
             # temp_plan = get_plan(req)
             # dist = self.calculate_path_length(temp_plan.plan)
             covered_distance_2 = -dist
-            self.add_distance_to_dict(-1, t_1, dist)
+            if not self.moved:
+                self.add_distance_to_dict(-1, t_1, dist)
+            else:
+                self.add_distance_to_dict(self.current_goal.header.seq, t_1,
+                                          dist)
         # print("initial distance 2", covered_distance_1)
 
-        rospy.loginfo(
-            f'{self.id}: dist1: {covered_distance_1}, dist2: {covered_distance_2}')
+        # rospy.loginfo(
+        #     f'{self.id}: dist1: {covered_distance_1}, dist2: {covered_distance_2}')
         if covered_distance_1 <= covered_distance_2:
-            self.own_list = own_list_2
+            if self.moved:
+                self.second_list = own_list_2
+            else:
+                self.own_list = own_list_2
             self.covered_distance = covered_distance_2
         else:
-            self.own_list = own_list_1
-            self.covered_distance = covered_distance_1
-        for i in range(len(self.own_list)):
-            task_seq = self.own_list[i].header.seq
-            if i == 0:
-                self.covered_distance -= self.distance_dict[-1][task_seq]
+            if self.moved:
+                self.second_list = own_list_1
             else:
-                prev_task_seq = self.own_list[i - 1].header.seq
-                self.covered_distance -= self.distance_dict[prev_task_seq][
-                    task_seq]
-        rospy.loginfo(
-            f'{self.id}: new covered distance: {self.covered_distance}')
+                self.own_list = own_list_1
+            self.covered_distance = covered_distance_1
+        if self.moved:
+            for i in range(len(self.second_list)):
+                task_seq = self.second_list[i].header.seq
+                if i == 0:
+                    self.covered_distance -= \
+                        self.distance_dict[self.current_goal.header.seq][
+                            task_seq]
+                else:
+                    prev_task_seq = self.second_list[i - 1].header.seq
+                    self.covered_distance -= self.distance_dict[prev_task_seq][
+                        task_seq]
+        else:
+            for i in range(len(self.own_list)):
+                task_seq = self.own_list[i].header.seq
+                if i == 0:
+                    self.covered_distance -= self.distance_dict[-1][task_seq]
+                else:
+                    prev_task_seq = self.own_list[i - 1].header.seq
+                    self.covered_distance -= self.distance_dict[prev_task_seq][
+                        task_seq]
+        rospy.loginfo(f'{self.id}: SECOND LIST {self.second_list}')
+        for test in test_list:
+            if test not in self.own_list and test not in self.second_list:
+                rospy.logerr(f'{self.id}: TASK MISSING')
+        # rospy.loginfo(
+        #     f'{self.id}: new covered distance: {self.covered_distance}')
 
-        toc = time.perf_counter()
-        print(f"**************** Used {toc - tic} seconds! *******************")
+        # toc = time.perf_counter()
+        # print(f"**************** Used {toc - tic} seconds! *******************")
 
         # dist = 10000
         # combs = None
@@ -638,8 +757,8 @@ class Dealer:
             prev_x = x
             prev_y = y
 
-        print(total_distance)
-        print(type(total_distance))
+        # print(total_distance)
+        # print(type(total_distance))
 
         return total_distance
 
@@ -652,9 +771,10 @@ class Dealer:
             #     f'{self.id}: Start planning from: {self.initial_pose}')
             # rospy.loginfo(f'{self.id}: current pose: {self.current_pose}')
         elif len(self.own_list) == 0 and self.moved:
+            self.current_pose = self.current_goal
             self.current_pose.header.stamp = rospy.Time.now()
-            rospy.loginfo(
-                f'{self.id}: Starting planning from: {self.current_pose}')
+            # rospy.loginfo(
+            #     f'{self.id}: Starting planning from: {self.current_pose}')
         elif self.init:
             initial_pose = rospy.wait_for_message(f"{self.id}/amcl_pose",
                                                   PoseWithCovarianceStamped)
@@ -664,8 +784,8 @@ class Dealer:
             self.initial_pose.header = initial_pose.header
             self.init = False
             self.use_init = True
-            rospy.loginfo(
-                f'{self.id}: initial pose: {self.initial_pose}')
+            # rospy.loginfo(
+            #     f'{self.id}: initial pose: {self.initial_pose}')
             rospy.wait_for_service(f'{self.id}/move_base/clear_costmaps')
             clear_map = rospy.ServiceProxy(
                 f'{self.id}/move_base/clear_costmaps', Empty)
@@ -677,8 +797,8 @@ class Dealer:
         else:
             self.current_pose.pose = self.initial_pose.pose
             self.current_pose.header.stamp = rospy.Time.now()
-            rospy.loginfo(
-                f'{self.id}: current initial pose: {self.initial_pose}')
+            # rospy.loginfo(
+            #     f'{self.id}: current initial pose: {self.initial_pose}')
 
     def map_callback(self, data):
         # Store the map and its properties
@@ -689,8 +809,8 @@ class Dealer:
         self.resolution = data.info.resolution
         self.width = data.info.width
         self.height = data.info.height
-        print(
-            f'resolution: {self.resolution}\nwidth: {self.width}\nheight: {self.height}\norigin: {self.origin}')
+        # print(
+        #     f'resolution: {self.resolution}\nwidth: {self.width}\nheight: {self.height}\norigin: {self.origin}')
 
     #
     # def map_to_world(self, point):

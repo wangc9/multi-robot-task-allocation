@@ -1,7 +1,7 @@
 local_costmap:
   # TF frame
   global_frame: map
-  robot_base_frame: tb3_2/base_footprint
+  robot_base_frame: tb3_4/base_footprint
   width: 5
   height: 5
   resolution: 0.05
@@ -15,7 +15,7 @@ local_costmap:
   # Layers
   obstacles_layer:
     observation_sources: scan
-    scan: { sensor_frame: tb3_2/base_scan, data_type: LaserScan, topic: scan, marking: true, clearing: true }
+    scan: { sensor_frame: tb3_4/base_scan, data_type: LaserScan, topic: scan, marking: true, clearing: true }
     track_unknown_space: false
     footprint_clearing_enabled: true
     combination_method: 1
